@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { fileToBase64, isImage } from '../lib/files'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
-import { ImageIcon, LinkIcon, TagIcon } from './Icons'
+import { ImageIcon, LinkIcon } from './Icons'
 
 interface Props {
   /** When set the composer edits an existing memo instead of creating one. */
@@ -271,9 +271,9 @@ export function Composer({
               setSuggest({ start: position, query: '', index: 0, point: caretPoint(element, position + 1) })
             }
           }}
-          title="插入标签"
+          title="插入标签 #"
         >
-          <TagIcon size={13} /><span>标签</span>
+          <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>#</span>
         </button>
         <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件">
           <ImageIcon size={17} />

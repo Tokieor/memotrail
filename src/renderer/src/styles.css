@@ -68,6 +68,9 @@
   --tone-2: #c99a5b;
   --tone-3: #7b96b0;
   --tone-4: #b98c88;
+  --tag-ink: #3d6a9c;
+  --tag-bg: rgba(61, 106, 156, 0.1);
+  --tag-bg-hover: rgba(61, 106, 156, 0.17);
 
   /* Contribution heatmap ramp */
   --heat-0: #eeefe9;
@@ -147,44 +150,48 @@ button {
 
 /* Contribution heatmap (replaces the old new-note button) */
 .heatmap-card {
-  padding: 10px 10px 8px;
+  padding: 14px 13px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
+  border-radius: var(--r-card);
   background: var(--surface);
 }
-.heatmap-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  margin-bottom: 6px;
-}
-.heatmap-title { font-size: 11px; font-weight: 600; color: var(--ink); }
-.heatmap-total { font-size: 10px; color: var(--faint); }
-.heatmap-months {
+.heatmap-stats {
   display: grid;
-  grid-template-columns: repeat(16, 9px);
-  gap: 2px;
-  margin-bottom: 3px;
-  height: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 13px;
 }
-.heatmap-months span {
-  font-size: 8px; line-height: 12px; color: var(--faint); white-space: nowrap;
+.heatmap-stat { display: flex; flex-direction: column; gap: 1px; }
+.heatmap-stat-value {
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--muted);
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
 }
+.heatmap-stat-label { font-size: 10px; color: var(--faint); }
 .heatmap-grid {
   display: grid;
-  grid-template-rows: repeat(7, 9px);
+  grid-template-rows: repeat(7, 1fr);
   grid-auto-flow: column;
-  grid-auto-columns: 9px;
-  gap: 2px;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  aspect-ratio: 12 / 7;
 }
-.heatmap-cell { width: 9px; height: 9px; border-radius: 2px; background: var(--heat-0); }
+.heatmap-cell { border-radius: 4px; background: var(--heat-0); }
 .heatmap-cell.level-1 { background: var(--heat-1); }
 .heatmap-cell.level-2 { background: var(--heat-2); }
 .heatmap-cell.level-3 { background: var(--heat-3); }
 .heatmap-cell.level-4 { background: var(--heat-4); }
-.heatmap-legend {
-  display: flex; align-items: center; justify-content: flex-end; gap: 3px;
-  margin-top: 7px; font-size: 9px; color: var(--faint);
+.heatmap-cell.today { box-shadow: inset 0 0 0 1px var(--muted); }
+.heatmap-months {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  margin-top: 6px;
 }
-.heatmap-legend .heatmap-cell { width: 8px; height: 8px; }
+.heatmap-months span { font-size: 9px; color: var(--faint); white-space: nowrap; }
 
 .nav-list, .tag-list { display: flex; flex-direction: column; gap: 2px; }
 .section-label {
@@ -220,10 +227,11 @@ button {
   transition: background 0.15s, color 0.15s;
 }
 .nav-item:hover { background: var(--tint-hover); }
-.nav-item.active { background: var(--accent-soft); color: var(--accent-hover); font-weight: 500; }
+.nav-item.active { background: var(--ink); color: var(--paper); font-weight: 500; }
+.nav-item.active:hover { background: var(--ink); }
 .nav-item .label { flex: 1; }
 .nav-item .count { font-size: 11px; color: var(--faint); }
-.nav-item.active .count { color: var(--accent-mid); }
+.nav-item.active .count { color: var(--paper); opacity: 0.62; }
 .nav-item svg { flex: 0 0 18px; }
 
 .tag-item {
@@ -233,7 +241,9 @@ button {
   text-align: left; cursor: pointer; transition: background 0.15s;
 }
 .tag-item:hover { background: var(--tint-hover); }
-.tag-item.active { background: var(--accent-soft); color: var(--accent-hover); }
+.tag-item.active { background: var(--ink); color: var(--paper); }
+.tag-item.active:hover { background: var(--ink); }
+.tag-item.active .count { color: var(--paper); opacity: 0.62; }
 .tag-item .label { flex: 1; }
 .tag-item .count { font-size: 11px; color: var(--faint); }
 .tag-dot { width: 8px; height: 8px; border-radius: 4px; flex: 0 0 8px; }
@@ -608,8 +618,8 @@ button {
   padding: 0 4px;
   margin: 0;
   border-radius: 5px;
-  background: var(--tint-tag);
-  color: #47685a;
+  background: var(--tag-bg);
+  color: var(--tag-ink);
   font: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -619,7 +629,7 @@ button {
   -webkit-box-decoration-break: clone;
   cursor: pointer;
 }
-.md-tag:hover { background: var(--tint-tag-hover); }
+.md-tag:hover { background: var(--tag-bg-hover); }
 
 /* Tag autocomplete: opens under the textarea when `#` is typed. */
 .composer-input { position: relative; }
@@ -698,6 +708,9 @@ button {
   --tone-2: #5a5a5a;
   --tone-3: #8a8a8a;
   --tone-4: #b0b0b0;
+  --tag-ink: #4a6f96;
+  --tag-bg: rgba(74, 111, 150, 0.09);
+  --tag-bg-hover: rgba(74, 111, 150, 0.16);
   --heat-0: #ededed;
   --heat-1: #d4d4d4;
   --heat-2: #adadad;
@@ -744,6 +757,9 @@ button {
   --tone-2: #c9a26a;
   --tone-3: #8fa8c0;
   --tone-4: #c79b97;
+  --tag-ink: #8fb4d8;
+  --tag-bg: rgba(143, 180, 216, 0.16);
+  --tag-bg-hover: rgba(143, 180, 216, 0.24);
   --heat-0: #2b2a27;
   --heat-1: #33443b;
   --heat-2: #47685a;
@@ -789,6 +805,9 @@ button {
   --tone-2: #b0b0b0;
   --tone-3: #8a8a8a;
   --tone-4: #5a5a5a;
+  --tag-ink: #9bb3c9;
+  --tag-bg: rgba(155, 179, 201, 0.14);
+  --tag-bg-hover: rgba(155, 179, 201, 0.22);
   --heat-0: #242424;
   --heat-1: #3a3a3a;
   --heat-2: #5c5c5c;
