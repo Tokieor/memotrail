@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { loadConfig, loadRefreshToken, saveRefreshToken, takeLegacyArchived } from './config'
+import { clearLegacyArchived, loadConfig, loadRefreshToken, readLegacyArchived, saveRefreshToken } from './config'
 import { registerQuickHotkey, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
@@ -37,10 +37,19 @@ if (!app.requestSingleInstanceLock()) {
           console.warn('[memotrail] no stored session:', restored.error)
           return
         }
-        // Archive used to be tracked locally; push those notes into the server's own bucket.
-        for (const name of takeLegacyArchived()) {
-          const result = await memos.updateMemo(name, { state: 'ARCHIVED' })
-          if (!result.success) console.warn('[memotrail] could not migrate archived note', name, result.error)
+        // Archive used to be tracked locally; push those notes into the server's own bucket and
+        // only forget them once every one of them landed.
+        const legacy = readLegacyArchived()
+        if (legacy.length > 0) {
+          let migrated = true
+          for (const name of legacy) {
+            const result = await memos.updateMemo(name, { state: 'ARCHIVED' })
+            if (!result.success) {
+              migrated = false
+              console.warn('[memotrail] could not migrate archived note', name, result.error)
+            }
+          }
+          if (migrated) clearLegacyArchived()
         }
       })
     }

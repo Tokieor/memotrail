@@ -41,22 +41,33 @@ export interface WindowState {
 
 /**
  * One-off migration: an earlier build kept the archive bucket in `archivedMemos` because the API
- * was assumed to have no such flag. It does (`state`), so hand the names to the caller once and
- * drop the key — the file is rewritten without it on the next save anyway.
+ * was assumed to have no such flag. It does (`state`), so the names are pushed to the server once
+ * and the key is dropped afterwards — reading and clearing are separate steps so a failed write
+ * leaves the list intact for the next launch.
  */
-export function takeLegacyArchived(): string[] {
+export function readLegacyArchived(): string[] {
   const file = configPath()
   if (!existsSync(file)) return []
   try {
     const raw = JSON.parse(readFileSync(file, 'utf-8')) as { archivedMemos?: unknown }
     if (!Array.isArray(raw.archivedMemos)) return []
-    const names = raw.archivedMemos.filter((value): value is string => typeof value === 'string')
+    return raw.archivedMemos.filter((value): value is string => typeof value === 'string' && value.startsWith('memos/'))
+  } catch {
+    return []
+  }
+}
+
+export function clearLegacyArchived(): void {
+  const file = configPath()
+  if (!existsSync(file)) return
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as { archivedMemos?: unknown }
+    if (!('archivedMemos' in raw)) return
     delete raw.archivedMemos
     writeFileSync(file, JSON.stringify(raw, null, 2), 'utf-8')
     cached = null
-    return names
   } catch {
-    return []
+    /* a malformed file simply keeps the key until the next save rewrites it */
   }
 }
 
