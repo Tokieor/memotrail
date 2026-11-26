@@ -685,7 +685,9 @@ button {
 .quick-body-area textarea::placeholder { color: var(--faint); }
 .quick-footer {
   display: flex; align-items: center; gap: 8px;
-  height: 54px; flex: 0 0 54px; padding: 0 20px;
+  /* 46px = 26px icon row + 10px above/below, so the gap under the toolbar (body padding 10px)
+     and the gap under the divider match. */
+  height: 46px; flex: 0 0 46px; padding: 0 20px;
   border-top: 1px solid var(--border); background: var(--bg-soft);
 }
 .quick-footer .spacer { flex: 1; }
