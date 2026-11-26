@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { BoltIcon, ImageIcon, LinkIcon } from './components/Icons'
+import {
+  BoltIcon, CodeBlockIcon, CodeIcon, HeadingIcon, ImageIcon, LinkIcon, ListIcon, QuoteIcon, SendIcon
+} from './components/Icons'
 import { VisibilityPicker } from './components/VisibilityPicker'
 import { formatAccelerator } from './lib/accelerator'
 import { applyCachedTheme, applyTheme, watchSystemAppearance } from './lib/theme'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from './lib/tag-suggest'
+import { visibleLength } from './lib/text'
 
 type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC'
 type State = 'idle' | 'sending' | 'done' | 'error'
@@ -115,6 +118,88 @@ function QuickCapture(): JSX.Element {
     })
   }
 
+
+  /** Wraps the selection — or drops an empty pair with the caret in the middle — like the main composer. */
+  function togglePair(prefix: string, suffix = prefix): void {
+    const el = input.current
+    if (!el) return
+    const start = el.selectionStart ?? content.length
+    const end = el.selectionEnd ?? start
+    const selected = content.slice(start, end)
+    const next = `${content.slice(0, start)}${prefix}${selected}${suffix}${content.slice(end)}`
+    // Empty selection: the caret belongs between the pair so the next keystroke is inside it.
+    const caret = start + prefix.length + selected.length + (selected ? suffix.length : 0)
+    setContent(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(caret, caret)
+    })
+  }
+
+  /** Adds or removes a block marker (`## `, `- `, `> `) at the start of the caret's line. */
+  function prefixLine(prefix: string): void {
+    const el = input.current
+    if (!el) return
+    const caret = el.selectionStart ?? content.length
+    const lineStart = content.lastIndexOf('\n', Math.max(0, caret - 1)) + 1
+    const already = content.startsWith(prefix, lineStart)
+    const next = already
+      ? content.slice(0, lineStart) + content.slice(lineStart + prefix.length)
+      : content.slice(0, lineStart) + prefix + content.slice(lineStart)
+    const position = already ? Math.max(lineStart, caret - prefix.length) : caret + prefix.length
+    setContent(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(position, position)
+    })
+  }
+
+  function insertCodeBlock(): void {
+    const el = input.current
+    if (!el) return
+    const start = el.selectionStart ?? content.length
+    const end = el.selectionEnd ?? start
+    const body = content.slice(start, end)
+    const before = content.slice(0, start)
+    const lead = before.length === 0 || before.endsWith('\n') ? '' : '\n'
+    const fence = `${lead}\u0060\u0060\u0060\n${body}\n\u0060\u0060\u0060\n`
+    setContent(before + fence + content.slice(end))
+    const position = start + lead.length + 4 + body.length
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(position, position)
+    })
+  }
+
+  function applyFormat(kind: string): void {
+    const el = input.current
+    switch (kind) {
+      case 'bold': return togglePair('**')
+      case 'italic': return togglePair('*')
+      case 'strike': return togglePair('~~')
+      case 'underline': return togglePair('<u>', '</u>')
+      case 'heading': return prefixLine('## ')
+      case 'list': return prefixLine('- ')
+      case 'quote': return prefixLine('> ')
+      case 'code': return togglePair('\u0060')
+      case 'codeblock': return insertCodeBlock()
+      case 'link': {
+        if (!el) return
+        const start = el.selectionStart ?? content.length
+        const end = el.selectionEnd ?? start
+        const label = content.slice(start, end) || '文字'
+        setContent(`${content.slice(0, start)}[${label}](url)${content.slice(end)}`)
+        const position = start + label.length + 3
+        requestAnimationFrame(() => {
+          el.focus()
+          el.setSelectionRange(position, position + 3)
+        })
+        return
+      }
+      default: return
+    }
+  }
+
   async function submit(): Promise<void> {
     const text = content.trim()
     if (!text || state === 'sending') return
@@ -221,33 +306,49 @@ function QuickCapture(): JSX.Element {
         </div>
       </div>
 
+        <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
+          <button type="button" className="md-btn md-bold" title="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
+          <button type="button" className="md-btn md-italic" title="斜体 *文字*" data-tip="斜体" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
+          <button type="button" className="md-btn md-strike" title="删除线 ~~文字~~" data-tip="删除线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
+          <button type="button" className="md-btn md-underline" title="下划线 <u>文字</u>" data-tip="下划线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
+          <span className="md-sep" />
+          <button type="button" className="md-btn" title="标题 ##" data-tip="标题" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
+          <button type="button" className="md-btn" title="列表 -" data-tip="列表" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
+          <button type="button" className="md-btn" title="引用 >" data-tip="引用" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
+          <span className="md-sep" />
+          <button type="button" className="md-btn" title="行内代码 `文字`" data-tip="行内代码" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
+          <button type="button" className="md-btn" title="代码块" data-tip="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
+          <button type="button" className="md-btn" title="链接 [文字](url)" data-tip="链接" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
+        </div>
+
       <div className="quick-footer">
+        <VisibilityPicker value={visibility} onChange={setVisibility} size={15} />
         <button
-          className="tool-btn"
+          className="tool-btn plain"
           onClick={() => {
             const position = input.current?.selectionStart ?? content.length
             insertAtCursor('#')
             const element = input.current
             if (element && tags.length > 0) setSuggest({ start: position, query: '', index: 0, point: caretPoint(element, position + 1) })
           }}
-          title="插入标签 #"
-        ><span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>#</span></button>
-        <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片"><ImageIcon size={16} /></button>
-        <button className="tool-btn plain" onClick={() => insertAtCursor('[]()')} title="插入链接"><LinkIcon size={16} /></button>
-        <VisibilityPicker value={visibility} onChange={setVisibility} size={15} />
+          title="插入标签 #" data-tip="插入标签"
+        ><span style={{ fontSize: 15, lineHeight: 1 }}>#</span></button>
+        <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片" data-tip="插入图片"><ImageIcon size={17} /></button>
         <span className="spacer" />
         <span className={`quick-hint${state === 'error' ? ' inline-error' : ''}`}>
           {configured === false
             ? '请先在主界面登录'
-            : state === 'sending' ? '发送中…' : state === 'done' ? '已记录' : state === 'error' ? message : 'Enter 保存 · Esc 关闭'}
+            : state === 'sending' ? '发送中…' : state === 'done' ? '已记录' : state === 'error' ? message : `${visibleLength(content)} 字 · Enter 保存`}
         </span>
         <button
           type="button"
           onClick={() => void submit()}
           disabled={!content.trim() || state === 'sending'}
-          className="primary-btn"
+          className="send-btn"
+          title="保存笔记"
+          aria-label="保存笔记"
         >
-          保存笔记
+          {state === 'sending' ? <span className="send-spinner" /> : <SendIcon size={17} />}
         </button>
       </div>
     </div>
