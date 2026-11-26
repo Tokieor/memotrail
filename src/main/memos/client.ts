@@ -131,14 +131,31 @@ export async function currentUser(): Promise<ApiResult<User>> {
   return { success: true, data: result.data.user }
 }
 
+/**
+ * Servers before the archive feature reject the `state` query parameter outright, and a rejected
+ * list would blank the feed — so one failure disables the parameter for the rest of the session
+ * and the renderer falls back to filtering by `memo.state` on its own.
+ */
+let stateQuerySupported = true
+
 export async function listMemos(options: ListMemosOptions = {}): Promise<ApiResult<MemoList>> {
-  const params = new URLSearchParams()
-  params.set('pageSize', String(options.pageSize ?? 50))
-  if (options.pageToken) params.set('pageToken', options.pageToken)
-  if (options.filter) params.set('filter', options.filter)
-  // `state` is a scalar field, so the gateway reads it straight from the query string.
-  if (options.state) params.set('state', options.state)
-  return call<MemoList>(`/memos?${params.toString()}`, { method: 'GET' })
+  const build = (state?: string): string => {
+    const params = new URLSearchParams()
+    params.set('pageSize', String(options.pageSize ?? 50))
+    if (options.pageToken) params.set('pageToken', options.pageToken)
+    if (options.filter) params.set('filter', options.filter)
+    // `state` is a scalar field, so the gateway reads it straight from the query string.
+    if (state) params.set('state', state)
+    return `/memos?${params.toString()}`
+  }
+
+  if (!options.state || !stateQuerySupported) {
+    return call<MemoList>(build(), { method: 'GET' })
+  }
+  const result = await call<MemoList>(build(options.state), { method: 'GET' })
+  if (result.success || result.status !== 400) return result
+  stateQuerySupported = false
+  return call<MemoList>(build(), { method: 'GET' })
 }
 
 export async function createMemo(content: string, visibility: Visibility = 'PRIVATE'): Promise<ApiResult<Memo>> {
