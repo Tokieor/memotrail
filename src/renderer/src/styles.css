@@ -56,6 +56,10 @@
   /* Layout */
   --sidebar-w: 232px;
   --topbar-h: 68px;
+  /* Sidebar metrics — the first sidebar card must line up with the feed content. */
+  --sidebar-inset: 38px;
+  --brand-h: 48px;
+  --sidebar-gap: 8px;
   --feed-w: 720px;
   --editor-w: 800px;
   --scrim: rgba(46, 44, 41, 0.28);
@@ -139,14 +143,14 @@ button {
   flex: 0 0 var(--sidebar-w);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 38px 16px 16px;
+  gap: var(--sidebar-gap);
+  padding: var(--sidebar-inset) 16px 16px;
   background: var(--bg-soft);
   overflow-y: auto;
 }
 .sidebar::-webkit-scrollbar { width: 0; }
 
-.brand-row { display: flex; align-items: center; gap: 11px; height: 48px; padding: 0 2px; }
+.brand-row { display: flex; align-items: center; gap: 11px; height: var(--brand-h); padding: 0 2px; }
 .brand-name { font-size: 21px; font-weight: 600; letter-spacing: -0.2px; color: var(--ink); }
 .brand-sub { font-size: 9px; font-weight: 500; letter-spacing: 1px; color: var(--faint); }
 
@@ -330,7 +334,9 @@ button {
 
 /* ---------- Feed & note cards ---------- */
 .feed-scroll {
-  flex: 1; overflow-y: auto; padding: 24px;
+  flex: 1; overflow-y: auto;
+  /* Top padding is derived so the first card lines up with the sidebar card. */
+  padding: max(12px, calc(var(--sidebar-inset) + var(--brand-h) + var(--sidebar-gap) - var(--topbar-h))) 24px 24px;
 }
 .feed-inner { width: 100%; max-width: var(--feed-w); margin: 0 auto; }
 .feed-section-label {

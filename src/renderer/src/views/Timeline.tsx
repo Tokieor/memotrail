@@ -6,6 +6,7 @@ import { SettingsPanel } from '../components/SettingsPanel'
 import { Sidebar } from '../components/Sidebar'
 import type { NavKey, SyncState } from '../components/Sidebar'
 import { describeError } from '../lib/errors'
+import { formatAccelerator } from '../lib/accelerator'
 import {
   BackIcon,
   CardViewIcon,
@@ -310,7 +311,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="搜索笔记"
                 />
-                <span className="kbd">Ctrl/⌘+F</span>
+                <span className="kbd">{formatAccelerator('CommandOrControl+F')}</span>
               </label>
               <div className="view-switch">
                 <button className={listMode === 'card' ? 'active' : ''} title="卡片视图" onClick={() => setListMode('card')}>

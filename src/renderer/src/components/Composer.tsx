@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
+import { formatAccelerator } from '../lib/accelerator'
 import { fileToBase64, isImage } from '../lib/files'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
 import { ImageIcon, LinkIcon } from './Icons'
@@ -292,7 +293,7 @@ export function Composer({
           }}
         />
         <span className="spacer" />
-        <span className="quick-hint">{error ? '' : `${content.trim().length} 字`} · Ctrl/⌘+Enter 保存</span>
+        <span className="quick-hint">{error ? '' : `${content.trim().length} 字`} · {formatAccelerator('CommandOrControl+Enter')} 保存</span>
         {onCancel && (
           <button className="ghost-btn" onClick={onCancel}>取消</button>
         )}
