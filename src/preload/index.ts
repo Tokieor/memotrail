@@ -15,7 +15,10 @@ const api = {
   memos: {
     list: (options: ListMemosOptions = {}) => ipcRenderer.invoke('memos:list', options) as Promise<{ success: boolean; data?: MemoList; error?: string }>,
     create: (content: string, visibility?: Visibility) =>
-      ipcRenderer.invoke('memos:create', content, visibility) as Promise<{ success: boolean; data?: Memo; error?: string }>
+      ipcRenderer.invoke('memos:create', content, visibility) as Promise<{ success: boolean; data?: Memo; error?: string }>,
+    update: (name: string, patch: { content?: string; visibility?: Visibility; pinned?: boolean }) =>
+      ipcRenderer.invoke('memos:update', name, patch) as Promise<{ success: boolean; data?: Memo; error?: string }>,
+    remove: (name: string) => ipcRenderer.invoke('memos:delete', name) as Promise<{ success: boolean; error?: string }>
   },
   quick: {
     capture: (payload: QuickCapturePayload) =>

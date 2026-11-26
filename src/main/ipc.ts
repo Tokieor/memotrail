@@ -44,6 +44,8 @@ export function registerIpc(): void {
   })
 
   handle('memos:list', (options: ListMemosOptions) => memos.listMemos(options))
+  handle('memos:update', (_event, name: string, patch: memos.MemoPatch) => memos.updateMemo(name, patch))
+  handle('memos:delete', (_event, name: string) => memos.deleteMemo(name))
   handle('memos:create', (content: string, visibility?: Visibility) => memos.createMemo(content, visibility))
 
   handle('quick:capture', async (payload: QuickCapturePayload) => {

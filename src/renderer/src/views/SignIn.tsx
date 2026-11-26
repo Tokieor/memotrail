@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AppConfig, User } from '@shared/types'
+import { describeError } from '../lib/errors'
 
 interface Props {
   config: AppConfig
@@ -23,7 +24,7 @@ export function SignIn({ config, onSignedIn }: Props): JSX.Element {
       const next = await window.api.config.get()
       onSignedIn(result.data, next)
     } else {
-      setError(result.error ?? '登录失败')
+      setError(describeError(result.error ?? '登录失败'))
     }
     setBusy(false)
   }
