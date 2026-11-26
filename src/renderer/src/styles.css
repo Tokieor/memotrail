@@ -708,9 +708,9 @@ button {
   --tone-2: #5a5a5a;
   --tone-3: #8a8a8a;
   --tone-4: #b0b0b0;
-  --tag-ink: #4a6f96;
-  --tag-bg: rgba(74, 111, 150, 0.09);
-  --tag-bg-hover: rgba(74, 111, 150, 0.16);
+  --tag-ink: #3f3f3f;
+  --tag-bg: rgba(0, 0, 0, 0.06);
+  --tag-bg-hover: rgba(0, 0, 0, 0.1);
   --heat-0: #ededed;
   --heat-1: #d4d4d4;
   --heat-2: #adadad;
@@ -805,9 +805,9 @@ button {
   --tone-2: #b0b0b0;
   --tone-3: #8a8a8a;
   --tone-4: #5a5a5a;
-  --tag-ink: #9bb3c9;
-  --tag-bg: rgba(155, 179, 201, 0.14);
-  --tag-bg-hover: rgba(155, 179, 201, 0.22);
+  --tag-ink: #d4d4d4;
+  --tag-bg: rgba(255, 255, 255, 0.1);
+  --tag-bg-hover: rgba(255, 255, 255, 0.16);
   --heat-0: #242424;
   --heat-1: #3a3a3a;
   --heat-2: #5c5c5c;
