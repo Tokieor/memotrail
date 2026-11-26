@@ -23,6 +23,8 @@ interface Props {
   variant?: 'feed' | 'editor'
   /** Most-used tags offered after typing `#`. */
   tagSuggestions?: string[]
+  /** Overrides the empty-state hint, e.g. the archive view files what you write. */
+  placeholder?: string
   onSubmitted: (memo: Memo) => void
   onCancel?: () => void
 }
@@ -42,6 +44,7 @@ export function Composer({
   submitLabel,
   variant = 'feed',
   tagSuggestions = [],
+  placeholder = PLACEHOLDER,
   onSubmitted,
   onCancel
 }: Props): JSX.Element {
@@ -430,7 +433,7 @@ export function Composer({
               if (e.key === 'Escape' && onCancel) onCancel()
             }}
             rows={isEditor ? 12 : 3}
-            placeholder={PLACEHOLDER}
+            placeholder={placeholder}
             className={isEditor ? 'editor-textarea' : ''}
             onPaste={(e) => {
               const files = Array.from(e.clipboardData.files)
@@ -450,7 +453,7 @@ export function Composer({
 
         {mode === 'preview' && isEmpty && (
           <div className={`composer-placeholder${isEditor ? ' editor-placeholder' : ''}`} aria-hidden="true">
-            {PLACEHOLDER}
+            {placeholder}
           </div>
         )}
 

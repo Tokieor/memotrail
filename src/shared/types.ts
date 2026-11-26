@@ -67,6 +67,11 @@ export interface AppConfig {
   sidebarCard: SidebarCard
   /** Tag colours and pins, kept locally because the API has no place for them. */
   tagMeta: TagMetaMap
+  /**
+   * Resource names (`memos/{id}`) of archived notes. The Memos API has no archive flag, so the
+   * client keeps the bucket itself; notes listed here vanish from the feed and surface in 归档.
+   */
+  archivedMemos: string[]
 }
 
 export interface ListMemosOptions {

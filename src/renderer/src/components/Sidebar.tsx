@@ -18,7 +18,7 @@ import {
   TrashIcon
 } from './Icons'
 
-export type NavKey = 'all' | 'today' | 'starred' | 'archive'
+export type NavKey = 'all' | 'today' | 'archive'
 export type SyncState = 'synced' | 'syncing' | 'error'
 
 interface Props {
@@ -29,7 +29,7 @@ interface Props {
   activeTag: string | null
   tags: TagStat[]
   tagSort: TagSort
-  counts: { all: number; today: number; starred: number }
+  counts: { all: number; today: number; archived: number }
   sync: { state: SyncState; label: string; detail: string }
   onNavigate: (key: NavKey) => void
   onSelectTag: (tag: string | null) => void
@@ -96,8 +96,7 @@ export function Sidebar({
       <nav className="nav-list">
         <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag} onClick={() => onNavigate('all')} />
         <NavItem icon={<CalendarIcon size={18} />} label="今日" count={counts.today || undefined} active={activeNav === 'today' && !activeTag} onClick={() => onNavigate('today')} />
-        <NavItem icon={<PinIcon size={18} />} label="置顶" count={counts.starred || undefined} active={activeNav === 'starred' && !activeTag} onClick={() => onNavigate('starred')} />
-        <NavItem icon={<ArchiveIcon size={18} />} label="归档" active={activeNav === 'archive' && !activeTag} onClick={() => onNavigate('archive')} />
+        <NavItem icon={<ArchiveIcon size={18} />} label="归档" count={counts.archived || undefined} active={activeNav === 'archive' && !activeTag} onClick={() => onNavigate('archive')} />
       </nav>
 
       <div className="section-label" style={{ marginTop: 12 }}>

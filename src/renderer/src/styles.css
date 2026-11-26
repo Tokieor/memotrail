@@ -458,11 +458,8 @@ button {
 }
 .meta-btn:hover { color: var(--accent); background: var(--accent-soft); }
 .meta-btn.on { color: var(--accent); }
-/* Unpinned cards keep the pin affordance quiet until the card is hovered. */
-.meta-btn.pin-btn { opacity: 0.45; transition: opacity 0.15s, color 0.15s; }
-.note-card:hover .meta-btn.pin-btn,
-.meta-btn.pin-btn.on { opacity: 1; }
 .pinned-flag { color: var(--accent); }
+.archived-flag { color: var(--muted); }
 
 /* Hover toolbar for card actions */
 .card-actions { display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity 0.15s; }

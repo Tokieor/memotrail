@@ -1,18 +1,21 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
-import { MoreIcon, PinIcon } from './Icons'
+import { MoreIcon } from './Icons'
 
 interface Props {
   memo: Memo
   serverUrl: string
   /** Tag name → CSS colour, so a customised tag keeps its colour inside note bodies. */
   tagColors?: Record<string, string>
+  /** Whether the note currently sits in the local archive bucket. */
+  archived: boolean
   /** Owned by the feed list so only one card's menu can be open at a time. */
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
   onChanged: (memo: Memo) => void
   onDeleted: (name: string) => void
+  onArchive: (archived: boolean) => void
   onEdit: (memo: Memo) => void
   onSelectTag?: (tag: string) => void
 }
@@ -20,9 +23,11 @@ interface Props {
 interface CardMenuProps {
   anchor: React.RefObject<HTMLButtonElement>
   pinned: boolean
+  archived: boolean
   onClose: () => void
   onEdit: () => void
   onPin: () => void
+  onArchive: () => void
   onCopy: () => void
   onDelete: () => void
 }
@@ -32,7 +37,7 @@ interface CardMenuProps {
  * and the owning card carries a raised z-index (`.note-card.menu-open`) so it also paints above
  * the following cards instead of sliding under them.
  */
-function CardMenu({ anchor, pinned, onClose, onEdit, onPin, onCopy, onDelete }: CardMenuProps): JSX.Element {
+function CardMenu({ anchor, pinned, archived, onClose, onEdit, onPin, onArchive, onCopy, onDelete }: CardMenuProps): JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const closeRef = useRef(onClose)
@@ -93,6 +98,9 @@ function CardMenu({ anchor, pinned, onClose, onEdit, onPin, onCopy, onDelete }: 
       <button className="action-btn" role="menuitem" onClick={() => { onClose(); onPin() }}>
         {pinned ? '取消置顶' : '置顶'}
       </button>
+      <button className="action-btn" role="menuitem" onClick={() => { onClose(); onArchive() }}>
+        {archived ? '移出归档' : '归档'}
+      </button>
       <button className="action-btn" role="menuitem" onClick={() => { onClose(); onCopy() }}>复制</button>
       <button className="action-btn danger" role="menuitem" onClick={() => { onClose(); onDelete() }}>删除</button>
     </div>
@@ -102,7 +110,7 @@ function CardMenu({ anchor, pinned, onClose, onEdit, onPin, onCopy, onDelete }: 
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
 export function MemoCard({
-  memo, serverUrl, tagColors, menuOpen, onMenuOpenChange, onChanged, onDeleted, onEdit, onSelectTag
+  memo, serverUrl, tagColors, archived, menuOpen, onMenuOpenChange, onChanged, onDeleted, onArchive, onEdit, onSelectTag
 }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -162,9 +170,11 @@ export function MemoCard({
         <CardMenu
           anchor={menuButton}
           pinned={Boolean(memo.pinned)}
+          archived={archived}
           onClose={() => onMenuOpenChange(false)}
           onEdit={() => onEdit(memo)}
           onPin={() => { void togglePin() }}
+          onArchive={() => onArchive(!archived)}
           onCopy={() => { void navigator.clipboard.writeText(memo.content) }}
           onDelete={() => { void remove() }}
         />
@@ -176,16 +186,7 @@ export function MemoCard({
         <span title={memo.createTime}>{relativeTime(memo.createTime)}</span>
         {memo.visibility !== 'PRIVATE' && <span>· {VISIBILITY_LABEL[memo.visibility] ?? memo.visibility}</span>}
         {memo.pinned && <span className="pinned-flag">· 置顶</span>}
-        <span className="spacer" />
-        <button
-          className={`meta-btn pin-btn${memo.pinned ? ' on' : ''}`}
-          title={memo.pinned ? '取消置顶' : '置顶'}
-          aria-label={memo.pinned ? '取消置顶' : '置顶'}
-          aria-pressed={Boolean(memo.pinned)}
-          onClick={() => void togglePin()}
-        >
-          <PinIcon size={14} filled={Boolean(memo.pinned)} />
-        </button>
+        {archived && <span className="archived-flag">· 已归档</span>}
       </div>
 
       {error && <p className="inline-error" style={{ marginTop: 8 }}>{error}</p>}

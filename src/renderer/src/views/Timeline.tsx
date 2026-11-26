@@ -51,9 +51,8 @@ function dayRange(day: string): { start: string; end: string } {
 }
 
 /** Builds the CEL expression Memos 0.31.0 expects in `?filter=`. */
-export function buildFilter(pinned: boolean, query: string, tag: string | null, day?: string | null): string | undefined {
+export function buildFilter(query: string, tag: string | null, day?: string | null): string | undefined {
   const parts: string[] = []
-  if (pinned) parts.push('pinned == true')
   if (query.trim()) parts.push(`content.contains(${JSON.stringify(query.trim())})`)
   if (tag) parts.push(`${JSON.stringify(tag)} in tags`)
   if (day) {
@@ -97,12 +96,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       setLoading(true)
       setError('')
       setSyncState('syncing')
-      const pinned = nav === 'starred'
       const effectiveTag = tag
-      // Archive is not a server filter in the current API; handled client-side below.
+      // Archive is a local bucket (the API has no such flag), so the server query stays unfiltered.
       const result = await window.api.memos.list({
         pageSize: 50,
-        filter: buildFilter(pinned, debouncedQuery, effectiveTag, day),
+        filter: buildFilter(debouncedQuery, effectiveTag, day),
         pageToken: reset ? undefined : nextPageToken
       })
       if (result.success && result.data) {
@@ -158,12 +156,26 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [load])
 
+  /** Local archive bucket: resource names of notes that belong in 归档 rather than the feed. */
+  const [archived, setArchived] = useState<string[]>(config.archivedMemos ?? [])
+  /** Mirror of `archived` so two quick toggles never write from a stale snapshot. */
+  const archivedRef = useRef<string[]>(archived)
+  useEffect(() => {
+    setArchived(config.archivedMemos ?? [])
+    archivedRef.current = config.archivedMemos ?? []
+  }, [config.archivedMemos])
+  const archivedSet = useMemo(() => new Set(archived), [archived])
+  /** Feed universe: everything the server returned minus the locally archived notes. */
+  const liveMemos = useMemo(() => memos.filter((memo) => !archivedSet.has(memo.name)), [memos, archivedSet])
+  const archivedMemos = useMemo(() => memos.filter((memo) => archivedSet.has(memo.name)), [memos, archivedSet])
+
   // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
+  // 归档笔记不算进标签计数，否则点进标签看到的条数会比侧栏少。
   const [tagStats, setTagStats] = useState<TagStat[]>([])
   useEffect(() => {
     if (tag || debouncedQuery) return
-    setTagStats(collectTagStats(memos))
-  }, [memos, tag, debouncedQuery])
+    setTagStats(collectTagStats(liveMemos))
+  }, [liveMemos, tag, debouncedQuery])
 
   const [tagMeta, setTagMeta] = useState<TagMetaMap>(config.tagMeta ?? {})
   useEffect(() => {
@@ -201,6 +213,25 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     }
   }
 
+  async function persistArchived(next: string[]): Promise<void> {
+    setArchived(next)
+    archivedRef.current = next
+    try {
+      const saved = await window.api.config.set({ archivedMemos: next })
+      onConfigChange(saved)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  /** Moves a note in or out of 归档; the memo itself is untouched on the server. */
+  function archiveMemo(name: string, toArchive: boolean): void {
+    const current = archivedRef.current
+    void persistArchived(
+      toArchive ? [...new Set([...current, name])] : current.filter((item) => item !== name)
+    )
+  }
+
   /** Every note carrying the tag, across pages — a rename/delete must not stop at page one. */
   async function listMemosWithTag(name: string): Promise<Memo[]> {
     const collected: Memo[] = []
@@ -208,7 +239,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     for (let page = 0; page < 20; page += 1) {
       const result = await window.api.memos.list({
         pageSize: 100,
-        filter: buildFilter(false, '', name),
+        filter: buildFilter('', name),
         pageToken
       })
       if (!result.success || !result.data) break
@@ -264,29 +295,33 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   }
 
   const visibleMemos = useMemo(() => {
-    if (nav === 'today') return memos.filter(isToday)
-    if (nav === 'archive') return []
-    return memos
-  }, [memos, nav])
+    if (nav === 'archive') return archivedMemos
+    return nav === 'today' ? liveMemos.filter(isToday) : liveMemos
+  }, [nav, liveMemos, archivedMemos])
 
   /**
-   * Pinned notes float above the rest so 「置顶」 means the same thing here as in the sidebar.
-   * `Array.prototype.sort` is stable, so the server's newest-first order survives inside a group;
-   * the starred view is already all-pinned and keeps its plain order.
+   * Pinned notes float above the rest of the feed. `filter` keeps the server's newest-first order
+   * inside each group; the archive view is a bucket of its own and stays flat.
    */
   const ordered = useMemo(() => {
-    if (nav === 'starred') return visibleMemos
+    if (nav === 'archive') return visibleMemos
     return [...visibleMemos.filter((memo) => memo.pinned), ...visibleMemos.filter((memo) => !memo.pinned)]
   }, [visibleMemos, nav])
 
-  const pinnedMemos = useMemo(() => ordered.filter((memo) => memo.pinned), [ordered])
+  const pinnedMemos = useMemo(
+    () => (nav === 'archive' ? [] : ordered.filter((memo) => memo.pinned)),
+    [ordered, nav]
+  )
   const restMemos = useMemo(() => ordered.filter((memo) => !memo.pinned), [ordered])
 
-  const counts = useMemo(() => ({
-    all: memos.length,
-    today: memos.filter(isToday).length,
-    starred: memos.filter((m) => m.pinned).length
-  }), [memos])
+  const counts = useMemo(
+    () => ({
+      all: liveMemos.length,
+      today: liveMemos.filter(isToday).length,
+      archived: archivedMemos.length
+    }),
+    [liveMemos, archivedMemos]
+  )
 
   function replace(memo: Memo): void {
     setMemos((current) => current.map((item) => (item.name === memo.name ? memo : item)))
@@ -294,6 +329,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   function remove(name: string): void {
     setMemos((current) => current.filter((item) => item.name !== name))
+    // A deleted note must not linger in the archive bucket.
+    if (archivedSet.has(name)) void persistArchived(archivedRef.current.filter((item) => item !== name))
   }
 
   function navigate(key: NavKey): void {
@@ -326,7 +363,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   const viewTitle = day
     ? `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日`
-    : tag ? `#${tag}` : nav === 'starred' ? '置顶' : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
+    : tag ? `#${tag}` : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
 
   function renderMemo(memo: Memo): JSX.Element {
     return (
@@ -335,10 +372,12 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         memo={memo}
         serverUrl={config.serverUrl}
         tagColors={tagColors}
+        archived={archivedSet.has(memo.name)}
         menuOpen={openMenu === memo.name}
         onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
         onChanged={replace}
         onDeleted={remove}
+        onArchive={(next) => archiveMemo(memo.name, next)}
         onEdit={(m) => { setOpenMenu(null); setEditing(m) }}
         onSelectTag={selectTag}
       />
@@ -350,13 +389,13 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       <Sidebar
         config={config}
         user={user}
-        memos={memos}
+        memos={liveMemos}
         activeNav={nav}
         activeTag={tag}
         tags={tags}
         tagSort={tagSort}
         counts={counts}
-        sync={{ state: syncState, label: syncLabel, detail: `${serverHost} · ${memos.length} 条笔记` }}
+        sync={{ state: syncState, label: syncLabel, detail: `${serverHost} · ${counts.all} 条笔记` }}
         onNavigate={navigate}
         onSelectTag={selectTag}
         onTagSortChange={changeTagSort}
@@ -483,11 +522,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 <Composer
                   focusSignal={composerFocus}
                   tagSuggestions={tagStats.map((stat) => stat.name)}
-                  onSubmitted={(memo) => setMemos((current) => [memo, ...current])}
+                  placeholder={nav === 'archive' ? '写点什么存进归档，写完就在这一栏里…' : undefined}
+                  onSubmitted={(memo) => {
+                    setMemos((current) => [memo, ...current])
+                    // Writing from 归档 files the new note straight into the archive.
+                    if (nav === 'archive') archiveMemo(memo.name, true)
+                  }}
                 />
 
                 {/* With pins in play the two groups carry their own labels; otherwise keep «最近». */}
-                {pinnedMemos.length === 0 && restMemos.length > 0 && (
+                {nav !== 'archive' && pinnedMemos.length === 0 && restMemos.length > 0 && (
                   <div className="feed-section-label">最近</div>
                 )}
 
@@ -512,7 +556,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 )}
                 {restMemos.map(renderMemo)}
 
-                {nextPageToken && nav !== 'today' && nav !== 'archive' && (
+                {/* 归档 lives on the same server list, so older archived notes need paging too. */}
+                {nextPageToken && nav !== 'today' && (
                   <button
                     onClick={() => void load(false)}
                     disabled={loading}
