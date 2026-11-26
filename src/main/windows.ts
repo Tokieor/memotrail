@@ -1,0 +1,78 @@
+import { BrowserWindow, shell } from 'electron'
+import { join } from 'node:path'
+
+const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
+
+export function createMainWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 1000,
+    height: 740,
+    minWidth: 720,
+    minHeight: 520,
+    show: false,
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  win.once('ready-to-show', () => win.show())
+
+  // Links open in the user's browser, never in an app window.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  if (RENDERER_URL) void win.loadURL(RENDERER_URL)
+  else void win.loadFile(join(__dirname, '../renderer/index.html'))
+
+  return win
+}
+
+let quickWindow: BrowserWindow | null = null
+
+/** The global-shortcut capture window: frameless, always on top, hides as soon as it loses focus. */
+export function showQuickWindow(): BrowserWindow {
+  if (quickWindow && !quickWindow.isDestroyed()) {
+    quickWindow.show()
+    quickWindow.focus()
+    return quickWindow
+  }
+
+  quickWindow = new BrowserWindow({
+    width: 560,
+    height: 220,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      contextIsolation: true
+    }
+  })
+
+  quickWindow.on('blur', () => quickWindow?.hide())
+  quickWindow.once('ready-to-show', () => {
+    quickWindow?.show()
+    quickWindow?.focus()
+  })
+
+  if (RENDERER_URL) void quickWindow.loadURL(`${RENDERER_URL}/quick.html`)
+  else void quickWindow.loadFile(join(__dirname, '../renderer/quick.html'))
+
+  return quickWindow
+}
+
+export function hideQuickWindow(): void {
+  quickWindow?.hide()
+}

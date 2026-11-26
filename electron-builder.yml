@@ -1,0 +1,46 @@
+appId: app.memotrail.desktop
+productName: MemoTrail
+copyright: Copyright (c) 2026 Tokieor
+
+directories:
+  buildResources: build
+  output: dist
+
+artifactName: ${productName}-${version}-${arch}.${ext}
+
+files:
+  - out/**/*
+
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*"
+
+mac:
+  icon: resources/icon.png
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - dmg
+  extendInfo:
+    NSLocalNetworkUsageDescription: "MemoTrail connects to your Memos server, which may be on your local network. / MemoTrail 需要访问本地网络，才能连接局域网内的 Memos 服务器。"
+
+win:
+  icon: resources/icon.png
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  createDesktopShortcut: true
+  allowToChangeInstallationDirectory: true
+
+linux:
+  icon: resources/icon.png
+  category: Utility
+  target:
+    - AppImage
