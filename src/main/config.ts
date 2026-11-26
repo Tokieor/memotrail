@@ -11,8 +11,7 @@ const DEFAULTS: AppConfig = {
   theme: 'classic',
   appearance: 'light',
   sidebarCard: 'heatmap',
-  tagMeta: {},
-  archivedMemos: []
+  tagMeta: {}
 }
 
 const TAG_COLORS: TagColorKey[] = ['tone-1', 'tone-2', 'tone-3', 'tone-4']
@@ -34,20 +33,31 @@ function sanitizeTagMeta(raw: unknown): TagMetaMap {
   return out
 }
 
-/** Archived note names; dropping anything that is not a memo resource keeps the file clean. */
-function sanitizeArchived(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  const seen = new Set<string>()
-  for (const value of raw) {
-    if (typeof value === 'string' && /^memos\/[^/]+$/.test(value)) seen.add(value)
-  }
-  return [...seen]
-}
-
 /** Last main-window size, kept out of the renderer-facing config. */
 export interface WindowState {
   width: number
   height: number
+}
+
+/**
+ * One-off migration: an earlier build kept the archive bucket in `archivedMemos` because the API
+ * was assumed to have no such flag. It does (`state`), so hand the names to the caller once and
+ * drop the key — the file is rewritten without it on the next save anyway.
+ */
+export function takeLegacyArchived(): string[] {
+  const file = configPath()
+  if (!existsSync(file)) return []
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as { archivedMemos?: unknown }
+    if (!Array.isArray(raw.archivedMemos)) return []
+    const names = raw.archivedMemos.filter((value): value is string => typeof value === 'string')
+    delete raw.archivedMemos
+    writeFileSync(file, JSON.stringify(raw, null, 2), 'utf-8')
+    cached = null
+    return names
+  } catch {
+    return []
+  }
 }
 
 interface StoredConfig extends AppConfig {
@@ -80,7 +90,6 @@ function read(): StoredConfig {
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
       tagMeta: sanitizeTagMeta(raw.tagMeta),
-      archivedMemos: sanitizeArchived(raw.archivedMemos),
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {}),
       ...(raw.windowState && typeof raw.windowState.width === 'number' && typeof raw.windowState.height === 'number'
         ? { windowState: { width: raw.windowState.width, height: raw.windowState.height } }
@@ -109,7 +118,6 @@ export function saveConfig(patch: Partial<AppConfig>): AppConfig {
   const next: StoredConfig = { ...read(), ...patch }
   if (typeof next.serverUrl === 'string') next.serverUrl = next.serverUrl.trim().replace(/\/+$/, '')
   next.tagMeta = sanitizeTagMeta(next.tagMeta)
-  next.archivedMemos = sanitizeArchived(next.archivedMemos)
   write(next)
   return loadConfig()
 }

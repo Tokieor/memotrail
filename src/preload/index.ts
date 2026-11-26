@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, ListMemosOptions, Memo, MemoList, QuickCapturePayload, User, Visibility } from '../shared/types'
+import type { AppConfig, ListMemosOptions, Memo, MemoList, MemoState, QuickCapturePayload, User, Visibility } from '../shared/types'
 
 const api = {
   config: {
@@ -23,7 +23,7 @@ const api = {
     list: (options: ListMemosOptions = {}) => ipcRenderer.invoke('memos:list', options) as Promise<{ success: boolean; data?: MemoList; error?: string }>,
     create: (content: string, visibility?: Visibility) =>
       ipcRenderer.invoke('memos:create', content, visibility) as Promise<{ success: boolean; data?: Memo; error?: string }>,
-    update: (name: string, patch: { content?: string; visibility?: Visibility; pinned?: boolean }) =>
+    update: (name: string, patch: { content?: string; visibility?: Visibility; pinned?: boolean; state?: MemoState }) =>
       ipcRenderer.invoke('memos:update', name, patch) as Promise<{ success: boolean; data?: Memo; error?: string }>,
     onChange: (callback: () => void) => {
       const listener = (): void => callback()

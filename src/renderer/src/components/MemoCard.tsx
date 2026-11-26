@@ -8,8 +8,6 @@ interface Props {
   serverUrl: string
   /** Tag name → CSS colour, so a customised tag keeps its colour inside note bodies. */
   tagColors?: Record<string, string>
-  /** Whether the note currently sits in the local archive bucket. */
-  archived: boolean
   /** Owned by the feed list so only one card's menu can be open at a time. */
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
@@ -110,9 +108,11 @@ function CardMenu({ anchor, pinned, archived, onClose, onEdit, onPin, onArchive,
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
 export function MemoCard({
-  memo, serverUrl, tagColors, archived, menuOpen, onMenuOpenChange, onChanged, onDeleted, onArchive, onEdit, onSelectTag
+  memo, serverUrl, tagColors, menuOpen, onMenuOpenChange, onChanged, onDeleted, onArchive, onEdit, onSelectTag
 }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
+  // The server owns the bucket; a missing `state` on older builds simply means "not archived".
+  const archived = memo.state === 'ARCHIVED'
   const [error, setError] = useState('')
   const menuButton = useRef<HTMLButtonElement>(null)
   const html = useMemo(() => renderMarkdown(memo.content, tagColors), [memo.content, tagColors])

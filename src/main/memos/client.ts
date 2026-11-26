@@ -1,11 +1,11 @@
 import { net } from 'electron'
-import type { ApiResult, ListMemosOptions, Memo, MemoList, User, Visibility } from '../../shared/types'
+import type { ApiResult, ListMemosOptions, Memo, MemoList, MemoState, User, Visibility } from '../../shared/types'
 
 // The Memos 0.31.0 HTTP API (grpc-gateway, see proto/api/v1/*_service.proto):
 //   POST /api/v1/auth/signin   { passwordCredentials: { username, password } } -> { user, accessToken, ... }
 //   POST /api/v1/auth/refresh  rotates the refresh cookie, returns a new access token
 //   GET  /api/v1/auth/me       -> { user }
-//   GET  /api/v1/memos         ?pageSize=&pageToken=&filter=   (filter is CEL)
+//   GET  /api/v1/memos         ?pageSize=&pageToken=&filter=&state=   (filter is CEL)
 //   POST /api/v1/memos         body is the Memo (content, visibility)
 //
 // Everything hangs off /api/v1 on 0.31.0; the unprefixed /api/... routes answer 404.
@@ -136,6 +136,8 @@ export async function listMemos(options: ListMemosOptions = {}): Promise<ApiResu
   params.set('pageSize', String(options.pageSize ?? 50))
   if (options.pageToken) params.set('pageToken', options.pageToken)
   if (options.filter) params.set('filter', options.filter)
+  // `state` is a scalar field, so the gateway reads it straight from the query string.
+  if (options.state) params.set('state', options.state)
   return call<MemoList>(`/memos?${params.toString()}`, { method: 'GET' })
 }
 
@@ -170,6 +172,8 @@ export interface MemoPatch {
   content?: string
   visibility?: Visibility
   pinned?: boolean
+  /** `ARCHIVED` files the note in 归档, `NORMAL` restores it. */
+  state?: MemoState
 }
 
 /** PATCH /api/v1/memos/{id}?updateMask=… — only the fields present in the patch are sent. */

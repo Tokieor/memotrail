@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { loadConfig, loadRefreshToken, saveRefreshToken } from './config'
+import { loadConfig, loadRefreshToken, saveRefreshToken, takeLegacyArchived } from './config'
 import { registerQuickHotkey, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
@@ -32,8 +32,16 @@ if (!app.requestSingleInstanceLock()) {
       // The refresh token is a rotating cookie the server hands back in a response header; we keep
       // it encrypted with the OS keychain so a restart can sign in again without the password.
       memos.setRefreshToken(loadRefreshToken())
-      void memos.refresh().then((restored) => {
-        if (!restored.success) console.warn('[memotrail] no stored session:', restored.error)
+      void memos.refresh().then(async (restored) => {
+        if (!restored.success) {
+          console.warn('[memotrail] no stored session:', restored.error)
+          return
+        }
+        // Archive used to be tracked locally; push those notes into the server's own bucket.
+        for (const name of takeLegacyArchived()) {
+          const result = await memos.updateMemo(name, { state: 'ARCHIVED' })
+          if (!result.success) console.warn('[memotrail] could not migrate archived note', name, result.error)
+        }
       })
     }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppConfig, Memo, TagColorKey, TagMetaMap, User } from '@shared/types'
+import type { AppConfig, Memo, MemoState, TagColorKey, TagMetaMap, User } from '@shared/types'
 import { Composer } from '../components/Composer'
 import { MemoCard } from '../components/MemoCard'
 import { SettingsPanel } from '../components/SettingsPanel'
@@ -97,10 +97,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       setError('')
       setSyncState('syncing')
       const effectiveTag = tag
-      // Archive is a local bucket (the API has no such flag), so the server query stays unfiltered.
+      // 归档 is a server-side bucket: the same list endpoint, a different `state`.
       const result = await window.api.memos.list({
         pageSize: 50,
         filter: buildFilter(debouncedQuery, effectiveTag, day),
+        state: nav === 'archive' ? 'ARCHIVED' : 'NORMAL',
         pageToken: reset ? undefined : nextPageToken
       })
       if (result.success && result.data) {
@@ -156,26 +157,29 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [load])
 
-  /** Local archive bucket: resource names of notes that belong in 归档 rather than the feed. */
-  const [archived, setArchived] = useState<string[]>(config.archivedMemos ?? [])
-  /** Mirror of `archived` so two quick toggles never write from a stale snapshot. */
-  const archivedRef = useRef<string[]>(archived)
+  /**
+   * The server owns the archive (`state === 'ARCHIVED'`). Filtering again on the client keeps the
+   * feed clean on servers that ignore the `state` query and still return both buckets.
+   */
+  const liveMemos = useMemo(() => memos.filter((memo) => memo.state !== 'ARCHIVED'), [memos])
+  const archivedMemos = useMemo(() => memos.filter((memo) => memo.state === 'ARCHIVED'), [memos])
+
+  /**
+   * The sidebar always describes the feed (heatmap, tag counts, badges), so it keeps the last
+   * non-archive snapshot: inside 归档 the loaded list only holds archived notes.
+   */
+  const [feedMemos, setFeedMemos] = useState<Memo[]>([])
   useEffect(() => {
-    setArchived(config.archivedMemos ?? [])
-    archivedRef.current = config.archivedMemos ?? []
-  }, [config.archivedMemos])
-  const archivedSet = useMemo(() => new Set(archived), [archived])
-  /** Feed universe: everything the server returned minus the locally archived notes. */
-  const liveMemos = useMemo(() => memos.filter((memo) => !archivedSet.has(memo.name)), [memos, archivedSet])
-  const archivedMemos = useMemo(() => memos.filter((memo) => archivedSet.has(memo.name)), [memos, archivedSet])
+    if (nav !== 'archive') setFeedMemos(liveMemos)
+  }, [liveMemos, nav])
 
   // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
   // 归档笔记不算进标签计数，否则点进标签看到的条数会比侧栏少。
   const [tagStats, setTagStats] = useState<TagStat[]>([])
   useEffect(() => {
     if (tag || debouncedQuery) return
-    setTagStats(collectTagStats(liveMemos))
-  }, [liveMemos, tag, debouncedQuery])
+    setTagStats(collectTagStats(feedMemos))
+  }, [feedMemos, tag, debouncedQuery])
 
   const [tagMeta, setTagMeta] = useState<TagMetaMap>(config.tagMeta ?? {})
   useEffect(() => {
@@ -213,39 +217,45 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     }
   }
 
-  async function persistArchived(next: string[]): Promise<void> {
-    setArchived(next)
-    archivedRef.current = next
-    try {
-      const saved = await window.api.config.set({ archivedMemos: next })
-      onConfigChange(saved)
-    } catch (err) {
-      setError((err as Error).message)
+  /**
+   * Moves a note between 归档 and the feed. The bucket lives on the server (`state`), so the note
+   * leaves this list once the write lands; the archive view fetches its own bucket.
+   */
+  async function setMemoState(memo: Memo, next: MemoState): Promise<void> {
+    setError('')
+    const result = await window.api.memos.update(memo.name, { state: next })
+    if (!result.success) {
+      setError(result.error ?? '更新归档状态失败')
+      return
+    }
+    // The card stays only when it now belongs to the bucket this view is showing.
+    if ((nav === 'archive') === (next === 'ARCHIVED')) {
+      if (result.data) replace(result.data)
+    } else {
+      remove(memo.name)
     }
   }
 
-  /** Moves a note in or out of 归档; the memo itself is untouched on the server. */
-  function archiveMemo(name: string, toArchive: boolean): void {
-    const current = archivedRef.current
-    void persistArchived(
-      toArchive ? [...new Set([...current, name])] : current.filter((item) => item !== name)
-    )
-  }
-
-  /** Every note carrying the tag, across pages — a rename/delete must not stop at page one. */
+  /**
+   * Every note carrying the tag, across pages and both buckets — a rename/delete must reach
+   * archived notes too, and must not stop at page one.
+   */
   async function listMemosWithTag(name: string): Promise<Memo[]> {
     const collected: Memo[] = []
-    let pageToken: string | undefined
-    for (let page = 0; page < 20; page += 1) {
-      const result = await window.api.memos.list({
-        pageSize: 100,
-        filter: buildFilter('', name),
-        pageToken
-      })
-      if (!result.success || !result.data) break
-      collected.push(...(result.data.memos ?? []))
-      pageToken = result.data.nextPageToken || undefined
-      if (!pageToken) break
+    for (const state of ['NORMAL', 'ARCHIVED'] as MemoState[]) {
+      let pageToken: string | undefined
+      for (let page = 0; page < 20; page += 1) {
+        const result = await window.api.memos.list({
+          pageSize: 100,
+          filter: buildFilter('', name),
+          state,
+          pageToken
+        })
+        if (!result.success || !result.data) break
+        collected.push(...(result.data.memos ?? []))
+        pageToken = result.data.nextPageToken || undefined
+        if (!pageToken) break
+      }
     }
     return collected
   }
@@ -315,12 +325,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   const restMemos = useMemo(() => ordered.filter((memo) => !memo.pinned), [ordered])
 
   const counts = useMemo(
-    () => ({
-      all: liveMemos.length,
-      today: liveMemos.filter(isToday).length,
-      archived: archivedMemos.length
-    }),
-    [liveMemos, archivedMemos]
+    () => ({ all: feedMemos.length, today: feedMemos.filter(isToday).length }),
+    [feedMemos]
   )
 
   function replace(memo: Memo): void {
@@ -329,8 +335,6 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   function remove(name: string): void {
     setMemos((current) => current.filter((item) => item.name !== name))
-    // A deleted note must not linger in the archive bucket.
-    if (archivedSet.has(name)) void persistArchived(archivedRef.current.filter((item) => item !== name))
   }
 
   function navigate(key: NavKey): void {
@@ -372,12 +376,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         memo={memo}
         serverUrl={config.serverUrl}
         tagColors={tagColors}
-        archived={archivedSet.has(memo.name)}
         menuOpen={openMenu === memo.name}
         onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
         onChanged={replace}
         onDeleted={remove}
-        onArchive={(next) => archiveMemo(memo.name, next)}
+        onArchive={(next) => { void setMemoState(memo, next ? 'ARCHIVED' : 'NORMAL') }}
         onEdit={(m) => { setOpenMenu(null); setEditing(m) }}
         onSelectTag={selectTag}
       />
@@ -389,7 +392,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       <Sidebar
         config={config}
         user={user}
-        memos={liveMemos}
+        memos={feedMemos}
         activeNav={nav}
         activeTag={tag}
         tags={tags}
@@ -481,7 +484,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 <p className="subtitle">
                   {day
                     ? `共 ${visibleMemos.length} 条 · 再点一次日期可取消筛选`
-                    : `共 ${visibleMemos.length} 条${pinnedMemos.length > 0 ? ` · 置顶 ${pinnedMemos.length}` : ''} · 今天新增 ${counts.today} 条`}
+                    : nav === 'archive'
+                      ? `共 ${visibleMemos.length} 条 · 已归档的笔记不进「全部笔记」`
+                      : `共 ${visibleMemos.length} 条${pinnedMemos.length > 0 ? ` · 置顶 ${pinnedMemos.length}` : ''} · 今天新增 ${counts.today} 条`}
                 </p>
               </div>
               <span className="spacer" />
@@ -526,7 +531,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                   onSubmitted={(memo) => {
                     setMemos((current) => [memo, ...current])
                     // Writing from 归档 files the new note straight into the archive.
-                    if (nav === 'archive') archiveMemo(memo.name, true)
+                    if (nav === 'archive') void setMemoState(memo, 'ARCHIVED')
                   }}
                 />
 

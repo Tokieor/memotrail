@@ -55,7 +55,8 @@ function QuickCapture(): JSX.Element {
   // 最近用过的标签：拿一页笔记现算，拿不到就算了（未登录/离线时静默）。
   useEffect(() => {
     void (async () => {
-      const result = await window.api.memos.list({ pageSize: 30 })
+      // Archived notes should not feed the tag suggestions for a fresh capture.
+      const result = await window.api.memos.list({ pageSize: 30, state: 'NORMAL' })
       if (!result.success || !result.data) return
       const counts = new Map<string, number>()
       for (const memo of result.data.memos) {

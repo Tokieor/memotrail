@@ -3,6 +3,9 @@
 export type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC' | 'SPACE'
 
 /** A memo as the Memos API (26.x, `/api/memos`) returns it. */
+/** Server-side memo bucket: archived notes are hidden from the feed and listed in 归档. */
+export type MemoState = 'STATE_UNSPECIFIED' | 'NORMAL' | 'ARCHIVED'
+
 export interface Memo {
   /** Resource name: `memos/{id}`. */
   name: string
@@ -13,6 +16,8 @@ export interface Memo {
   createTime?: string
   updateTime?: string
   pinned?: boolean
+  /** `ARCHIVED` once the note is filed away; older servers simply omit it. */
+  state?: MemoState
   tags?: string[]
 }
 
@@ -67,11 +72,6 @@ export interface AppConfig {
   sidebarCard: SidebarCard
   /** Tag colours and pins, kept locally because the API has no place for them. */
   tagMeta: TagMetaMap
-  /**
-   * Resource names (`memos/{id}`) of archived notes. The Memos API has no archive flag, so the
-   * client keeps the bucket itself; notes listed here vanish from the feed and surface in 归档.
-   */
-  archivedMemos: string[]
 }
 
 export interface ListMemosOptions {
@@ -79,6 +79,8 @@ export interface ListMemosOptions {
   pageToken?: string
   /** CEL filter, e.g. `pinned` or `"work" in tags`. */
   filter?: string
+  /** Which bucket to list. Omitting it makes some servers return both. */
+  state?: MemoState
 }
 
 export interface QuickCapturePayload {
