@@ -18,6 +18,13 @@ const api = {
       ipcRenderer.invoke('memos:create', content, visibility) as Promise<{ success: boolean; data?: Memo; error?: string }>,
     update: (name: string, patch: { content?: string; visibility?: Visibility; pinned?: boolean }) =>
       ipcRenderer.invoke('memos:update', name, patch) as Promise<{ success: boolean; data?: Memo; error?: string }>,
+    onChange: (callback: () => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('memos:changed', listener)
+      return () => {
+        ipcRenderer.removeListener('memos:changed', listener)
+      }
+    },
     remove: (name: string) => ipcRenderer.invoke('memos:delete', name) as Promise<{ success: boolean; error?: string }>
   },
   attachments: {

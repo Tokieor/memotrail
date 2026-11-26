@@ -17,6 +17,37 @@ const API_ROOT = '/api/v1'
 
 let baseUrl = ''
 let accessToken: string | null = null
+let refreshToken: string | null = null
+let refreshTokenSink: ((token: string | null) => void) | null = null
+
+/** The refresh cookie is persisted (encrypted) by the main process so restarts stay signed in. */
+export function setRefreshToken(token: string | null): void {
+  refreshToken = token
+}
+
+export function getRefreshToken(): string | null {
+  return refreshToken
+}
+
+export function setRefreshTokenSink(sink: (token: string | null) => void): void {
+  refreshTokenSink = sink
+}
+
+/**
+ * grpc-gateway hands the refresh cookie back as `Grpc-Metadata-Set-Cookie` (a real `Set-Cookie`
+ * never arrives) and only reads it from `Grpc-Metadata-Cookie` — a plain `Cookie:` header is
+ * ignored, which is why refresh used to answer `refresh token not found`.
+ */
+function captureRefreshToken(headers: Headers): void {
+  const raw = headers.get('grpc-metadata-set-cookie')
+  if (!raw) return
+  const match = /memos_refresh=([^;]+)/.exec(raw)
+  if (!match) return
+  const next = match[1]
+  if (next === refreshToken) return
+  refreshToken = next
+  refreshTokenSink?.(next)
+}
 
 export function setBaseUrl(url: string): void {
   baseUrl = url.replace(/\/+$/, '')
@@ -39,7 +70,9 @@ async function call<T>(path: string, init: RequestInit = {}, retryOn401 = true):
     return { success: false, error: `Network error: ${(err as Error).message}` }
   }
 
-  if (res.status === 401 && retryOn401) {
+  captureRefreshToken(res.headers)
+
+  if (res.status === 401 && retryOn401 && refreshToken) {
     const refreshed = await refresh()
     if (refreshed.success) return call<T>(path, init, false)
   }
@@ -81,7 +114,12 @@ export async function signIn(serverUrl: string, username: string, password: stri
 }
 
 export async function refresh(): Promise<ApiResult<void>> {
-  const result = await call<{ accessToken: string }>('/auth/refresh', { method: 'POST', body: '{}' }, false)
+  if (!refreshToken) return { success: false, error: 'No stored session' }
+  const result = await call<{ accessToken: string }>(
+    '/auth/refresh',
+    { method: 'POST', body: '{}', headers: { 'Grpc-Metadata-Cookie': `memos_refresh=${refreshToken}` } },
+    false
+  )
   if (!result.success) return result
   accessToken = result.data.accessToken
   return { success: true, data: undefined }
@@ -149,5 +187,7 @@ export async function deleteMemo(name: string): Promise<ApiResult<void>> {
 }
 
 export function signOut(): void {
+  refreshToken = null
+  refreshTokenSink?.(null)
   accessToken = null
 }

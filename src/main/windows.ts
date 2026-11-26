@@ -41,6 +41,10 @@ export function createMainWindow(): BrowserWindow {
   return win
 }
 
+export function getMainWindow(): BrowserWindow | null {
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+}
+
 /** Brings the timeline window forward, recreating it if the user closed it (macOS dock behaviour). */
 export function showMainWindow(): BrowserWindow {
   if (!mainWindow || mainWindow.isDestroyed()) return createMainWindow()

@@ -67,6 +67,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, debouncedQuery, tag])
 
+  // Writes from the quick-capture window (and any other window) reload the timeline.
+  useEffect(() => window.api.memos.onChange(() => void load(true)), [load])
+
   // Refreshing when the window regains focus keeps quick-captured memos in view.
   useEffect(() => {
     const onFocus = (): void => void load(true)

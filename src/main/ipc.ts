@@ -2,7 +2,7 @@ import { app, ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import * as memos from './memos/client'
 import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
-import { hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
+import { getMainWindow, hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
 import { registerQuickHotkey } from './hotkeys'
 
 /** Only the app's own pages may talk to these handlers. */
@@ -16,6 +16,11 @@ function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => R |
     if (!trusted(event)) throw new Error(`Refused IPC from an untrusted frame: ${channel}`)
     return fn(...(args as A))
   })
+}
+
+/** Tells the timeline to reload after a write, wherever it came from. */
+function broadcastChange(): void {
+  getMainWindow()?.webContents.send('memos:changed')
 }
 
 export function registerIpc(): void {
@@ -51,16 +56,31 @@ export function registerIpc(): void {
   })
 
   handle('memos:list', (options: ListMemosOptions) => memos.listMemos(options))
-  handle('attachments:upload', (_event, payload: { filename: string; type: string; data: string }) =>
+  handle('attachments:upload', (payload: { filename: string; type: string; data: string }) =>
     memos.uploadAttachment(payload.filename, payload.type, payload.data)
   )
-  handle('memos:update', (_event, name: string, patch: memos.MemoPatch) => memos.updateMemo(name, patch))
-  handle('memos:delete', (_event, name: string) => memos.deleteMemo(name))
-  handle('memos:create', (content: string, visibility?: Visibility) => memos.createMemo(content, visibility))
+  handle('memos:update', async (name: string, patch: memos.MemoPatch) => {
+    const result = await memos.updateMemo(name, patch)
+    if (result.success) broadcastChange()
+    return result
+  })
+  handle('memos:delete', async (name: string) => {
+    const result = await memos.deleteMemo(name)
+    if (result.success) broadcastChange()
+    return result
+  })
+  handle('memos:create', async (content: string, visibility?: Visibility) => {
+    const result = await memos.createMemo(content, visibility)
+    if (result.success) broadcastChange()
+    return result
+  })
 
   handle('quick:capture', async (payload: QuickCapturePayload) => {
     const result = await memos.createMemo(payload.content, payload.visibility)
-    if (result.success) hideQuickWindow()
+    if (result.success) {
+      broadcastChange()
+      hideQuickWindow()
+    }
     return result
   })
   handle('quick:hide', () => hideQuickWindow())
