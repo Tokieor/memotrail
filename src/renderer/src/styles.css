@@ -415,7 +415,7 @@ button {
   background: var(--surface); box-shadow: var(--shadow-card); margin-bottom: 8px;
 }
 .composer:focus-within { border-color: var(--accent); }
-.composer textarea { width: 100%; resize: none; border: 0; outline: 0; background: transparent; font: 14px/24px var(--font-sans); color: var(--ink); }
+.composer textarea { width: 100%; resize: none; border: 0; outline: 0; background: transparent; font: 14px/24px var(--font-sans); color: var(--ink); box-sizing: border-box; padding: 0; display: block; min-height: 72px; }
 .composer textarea::placeholder { color: var(--faint); }
 .composer-divider { height: 1px; background: var(--border); margin: 8px 0; }
 .composer-footer { display: flex; align-items: center; gap: 8px; }
@@ -957,15 +957,20 @@ button {
 .md-underline { text-decoration: underline; }
 .md-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--border); }
 
-/* WYSIWYG preview surface — shares .markdown rendering rules */
+/* WYSIWYG preview surface — shares .markdown rendering rules.
+   Height rules intentionally mirror `.composer textarea` so switching modes never resizes the box. */
 .composer-preview {
   min-height: 72px; max-height: 420px; overflow-y: auto;
   outline: 0; word-break: break-word;
   font: 14px/24px var(--font-sans); color: var(--ink);
+  box-sizing: border-box; padding: 0; display: block;
 }
 .editor-composer .composer-preview {
   min-height: 260px; line-height: 27px; color: var(--body);
 }
+/* First/last blocks must not add margins, or the preview grows taller than the textarea. */
+.composer-preview > :first-child { margin-top: 0; }
+.composer-preview > :last-child { margin-bottom: 0; }
 .composer-preview:empty::before,
 .composer-preview:has(> [data-placeholder])::before {
   content: attr(data-placeholder);
@@ -977,3 +982,24 @@ button {
 
 /* Active edit-mode toggle */
 .tool-btn.plain.active { background: var(--accent-soft); color: var(--accent-hover); }
+
+/* Unified hover tooltip for toolbar icon buttons (md-toolbar + composer footer) */
+.md-toolbar [data-tip],
+.composer-footer [data-tip] {
+  position: relative;
+}
+.md-toolbar [data-tip]::after,
+.composer-footer [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  padding: 3px 7px; border-radius: 5px;
+  background: rgba(46, 44, 41, 0.92); color: #fff;
+  font-size: 10.5px; font-weight: 400; line-height: 1.4; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 60;
+}
+.md-toolbar [data-tip]:hover::after,
+.composer-footer [data-tip]:hover::after {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}

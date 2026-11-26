@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { formatAccelerator } from '../lib/accelerator'
 import { fileToBase64, isImage } from '../lib/files'
@@ -76,7 +76,14 @@ export function Composer({
   }
 
   // External content replacement (editing a different memo) updates both state and the preview DOM.
+  // Skips the first render so a restored draft is never overwritten by an empty initialContent.
+  const prevInit = useRef({ memoName, initialContent })
   useEffect(() => {
+    const changed =
+      prevInit.current.memoName !== memoName ||
+      prevInit.current.initialContent !== initialContent
+    prevInit.current = { memoName, initialContent }
+    if (!changed) return
     setContent(initialContent)
     contentRef.current = initialContent
     setVisibility(initialVisibility)
@@ -84,8 +91,8 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContent, initialVisibility, memoName])
 
-  // Switching back to preview paints whatever the latest source is.
-  useEffect(() => {
+  // Repaint after the surface mounts so switching modes always shows the latest source.
+  useLayoutEffect(() => {
     if (mode === 'preview') paintPreview(contentRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
@@ -107,16 +114,15 @@ export function Composer({
 
   function switchMode(next: EditMode): void {
     if (next === mode) return
-    if (next === 'preview') {
-      setSuggest(null)
-      setMode('preview')
-      // paint after the element mounts
-      requestAnimationFrame(() => paintPreview(content))
-    } else {
-      setSuggest(null)
-      setMode('source')
-      requestAnimationFrame(() => ref.current?.focus())
+    setSuggest(null)
+    // Capture any pending WYSIWYG edits before leaving preview, so the source view is exact.
+    if (mode === 'preview' && previewRef.current) {
+      const md = htmlToMarkdown(previewRef.current.innerHTML)
+      contentRef.current = md
+      setContent(md)
     }
+    // Painting / focusing happens in the layout effect once the new surface is mounted.
+    setMode(next)
   }
 
   /** Preview editing: read rendered HTML back into Markdown source state. */
@@ -176,6 +182,41 @@ export function Composer({
   }
 
   /**
+   * Moves the caret to just after `node` so subsequent typing is not swallowed by an active
+   * inline format (the classic contenteditable "everything stays bold" bug).
+   */
+  function placeCaretAfter(node: Node): void {
+    const range = document.createRange()
+    range.setStartAfter(node)
+    range.collapse(true)
+    const selection = window.getSelection()
+    if (!selection) return
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
+  /** After formatting a selection, park the caret outside the styled element and clear the state. */
+  function settleAfterInline(tagNames: string[]): void {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+    let node: Node | null = selection.anchorNode
+    let styled: Node | null = null
+    while (node && node !== previewRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE && tagNames.includes((node as Element).tagName.toLowerCase())) {
+        styled = node
+        break
+      }
+      node = node.parentNode
+    }
+    if (styled) placeCaretAfter(styled)
+    // Toggling the command off at a collapsed caret clears the "pending" bold/italic state
+    // without touching the content that was just styled.
+    for (const cmd of ['bold', 'italic', 'strikeThrough', 'underline']) {
+      if (document.queryCommandState(cmd)) document.execCommand(cmd)
+    }
+  }
+
+  /**
    * Applies Markdown formatting. Source mode manipulates the text directly; preview mode uses
    * the browser's native rich-text commands. In both cases the caret ends up AFTER the inserted
    * mark (nothing selected), so typing continues normally.
@@ -185,11 +226,13 @@ export function Composer({
       const el = previewRef.current
       if (!el) return
       el.focus()
+      // Only single-line inline marks need the caret fix; block commands manage their own caret.
+      let inlineTags: string[] | null = null
       switch (kind) {
-        case 'bold': document.execCommand('bold'); break
-        case 'italic': document.execCommand('italic'); break
-        case 'strike': document.execCommand('strikeThrough'); break
-        case 'underline': document.execCommand('underline'); break
+        case 'bold': document.execCommand('bold'); inlineTags = ['b', 'strong']; break
+        case 'italic': document.execCommand('italic'); inlineTags = ['i', 'em']; break
+        case 'strike': document.execCommand('strikeThrough'); inlineTags = ['strike', 's', 'del']; break
+        case 'underline': document.execCommand('underline'); inlineTags = ['u']; break
         case 'heading': document.execCommand('formatBlock', false, 'h2'); break
         case 'quote': document.execCommand('formatBlock', false, 'blockquote'); break
         case 'list': document.execCommand('insertUnorderedList'); break
@@ -197,6 +240,7 @@ export function Composer({
           const selection = window.getSelection()
           const text = selection?.toString() ?? ''
           document.execCommand('insertHTML', false, `<code>${text || '代码'}</code>`)
+          inlineTags = ['code']
           break
         }
         case 'codeblock': document.execCommand('formatBlock', false, 'pre'); break
@@ -204,9 +248,11 @@ export function Composer({
           const selection = window.getSelection()
           const label = selection?.toString() || '链接文字'
           document.execCommand('insertHTML', false, `<a href="https://">${label}</a>`)
+          inlineTags = ['a']
           break
         }
       }
+      if (inlineTags) settleAfterInline(inlineTags)
       setContent(htmlToMarkdown(el.innerHTML))
       return
     }
@@ -429,18 +475,18 @@ export function Composer({
       </div>
 
       <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
-        <button type="button" className="md-btn md-bold" title="加粗 **文字**" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
-        <button type="button" className="md-btn md-italic" title="斜体 *文字*" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
-        <button type="button" className="md-btn md-strike" title="删除线 ~~文字~~" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
-        <button type="button" className="md-btn md-underline" title="下划线 <u>文字</u>" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
+        <button type="button" className="md-btn md-bold" title="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
+        <button type="button" className="md-btn md-italic" title="斜体 *文字*" data-tip="斜体" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
+        <button type="button" className="md-btn md-strike" title="删除线 ~~文字~~" data-tip="删除线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
+        <button type="button" className="md-btn md-underline" title="下划线 <u>文字</u>" data-tip="下划线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
         <span className="md-sep" />
-        <button type="button" className="md-btn" title="标题 ##" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
-        <button type="button" className="md-btn" title="列表 -" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
-        <button type="button" className="md-btn" title="引用 >" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
+        <button type="button" className="md-btn" title="标题 ##" data-tip="标题" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
+        <button type="button" className="md-btn" title="列表 -" data-tip="列表" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
+        <button type="button" className="md-btn" title="引用 >" data-tip="引用" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
         <span className="md-sep" />
-        <button type="button" className="md-btn" title="行内代码 `文字`" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
-        <button type="button" className="md-btn" title="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
-        <button type="button" className="md-btn" title="链接 [文字](url)" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
+        <button type="button" className="md-btn" title="行内代码 `文字`" data-tip="行内代码" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
+        <button type="button" className="md-btn" title="代码块" data-tip="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
+        <button type="button" className="md-btn" title="链接 [文字](url)" data-tip="链接" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
       </div>
 
       {error && <p className="inline-error" style={{ margin: '4px 0 6px' }}>{error}</p>}
@@ -463,11 +509,11 @@ export function Composer({
               }
             }
           }}
-          title="插入标签 #"
+          title="插入标签 #" data-tip="插入标签"
         >
           <span style={{ fontSize: 15, lineHeight: 1 }}>#</span>
         </button>
-        <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件">
+        <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件" data-tip="添加图片">
           <ImageIcon size={17} />
         </button>
         <input
@@ -483,14 +529,14 @@ export function Composer({
         <button
           className={`tool-btn plain${mode === 'preview' ? ' active' : ''}`}
           onClick={() => switchMode('preview')}
-          title="预览（所见即所得）"
+          title="预览（所见即所得）" data-tip="预览"
         >
           <EyeIcon size={17} />
         </button>
         <button
           className={`tool-btn plain${mode === 'source' ? ' active' : ''}`}
           onClick={() => switchMode('source')}
-          title="源代码（Markdown）"
+          title="源代码（Markdown）" data-tip="源代码"
         >
           <CodeIcon size={17} />
         </button>
