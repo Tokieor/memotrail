@@ -78,6 +78,14 @@ export function renderMarkdown(content: string, tagColors?: Record<string, strin
   return doc.body.innerHTML.replace(/(<img[^>]+src=")\/file\//g, '$1memotrail://local/file/')
 }
 
+/**
+ * Same rewrite as `renderMarkdown`, for callers that build their own `<img>` (the composer's
+ * attachment strip). Server-relative attachments need the private scheme to carry the token.
+ */
+export function attachmentUrl(url: string): string {
+  return url.startsWith('/file/') ? `memotrail://local${url}` : url
+}
+
 /** "刚刚 / 5 分钟前 / 昨天 14:20 / 3 月 2 日" — compact, good enough for a timeline. */
 export function relativeTime(iso?: string): string {
   if (!iso) return ''

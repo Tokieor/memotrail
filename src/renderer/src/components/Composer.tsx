@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { formatAccelerator } from '../lib/accelerator'
 import { fileToBase64, isImage } from '../lib/files'
-import { htmlToMarkdown, renderMarkdown } from '../lib/markdown'
+import { attachmentUrl, htmlToMarkdown, renderMarkdown } from '../lib/markdown'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
 import {
-  CheckMarkIcon, CodeBlockIcon, CodeIcon, EyeIcon, HeadingIcon, ImageIcon,
+  CheckMarkIcon, CloseIcon, CodeBlockIcon, CodeIcon, EyeIcon, HeadingIcon, ImageIcon,
   LinkIcon, ListIcon, QuoteIcon, SendIcon
 } from './Icons'
 import { VisibilityPicker } from './VisibilityPicker'
@@ -34,6 +34,28 @@ type MarkKind = 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'heading' 
 
 const DRAFT_KEY = 'memotrail.composer.draft'
 const PLACEHOLDER = '此刻有什么想记录的？换个标签，或直接开始写…'
+
+/** One inline image in the markdown source, with the offsets needed to cut it back out. */
+interface DraftImage {
+  alt: string
+  url: string
+  start: number
+  end: number
+}
+
+/**
+ * Images are found in source order, so the strip below the editor always mirrors what will be
+ * published — posting keeps the order and removing one entry only deletes its own token.
+ */
+function collectImages(markdown: string): DraftImage[] {
+  const out: DraftImage[] = []
+  const pattern = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(markdown)) !== null) {
+    out.push({ alt: match[1], url: match[2], start: match.index, end: match.index + match[0].length })
+  }
+  return out
+}
 
 export function Composer({
   memoName,
@@ -66,6 +88,22 @@ export function Composer({
   const isEditor = variant === 'editor'
   /** Preview mode shows the placeholder only while the source is genuinely empty. */
   const isEmpty = content.trim().length === 0
+  const images = useMemo(() => collectImages(content), [content])
+  /** Image tokens carry long attachment URLs — they must not inflate the character counter. */
+  const textLength = useMemo(() => content.replace(/!\[[^\]]*\]\([^)\s]+\)/g, '').trim().length, [content])
+  const [lightbox, setLightbox] = useState<DraftImage | null>(null)
+
+  // Escape closes the enlarged view without also cancelling the whole composer.
+  useEffect(() => {
+    if (!lightbox) return
+    function onKey(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setLightbox(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [lightbox])
   const options = useMemo(
     () => suggest ? filterTags(tagSuggestions, suggest.query) : [],
     [suggest, tagSuggestions]
@@ -321,6 +359,19 @@ export function Composer({
     })
   }
 
+  /** Cuts exactly one image token out of the source, leaving every other image in place. */
+  function removeImage(target: DraftImage): void {
+    const source = contentRef.current
+    const next = `${source.slice(0, target.start)}${source.slice(target.end)}`
+      .replace(/[ \t]\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\s+$/, '')
+    contentRef.current = next
+    setContent(next)
+    if (mode === 'preview') paintPreview(next)
+    setLightbox((current) => (current && current.start === target.start ? null : current))
+  }
+
   async function upload(file: File): Promise<void> {
     if (uploading) return
     setUploading(true)
@@ -486,6 +537,38 @@ export function Composer({
         })()}
       </div>
 
+      {(images.length > 0 || uploading) && (
+        <div className="composer-attachments" aria-label="图片附件">
+          {images.map((image, index) => (
+            <div className="attachment" key={`${image.start}-${image.url}`}>
+              <button
+                type="button"
+                className="attachment-open"
+                onClick={() => setLightbox(image)}
+                title="查看大图"
+                aria-label={`查看第 ${index + 1} 张图片`}
+              >
+                <img src={attachmentUrl(image.url)} alt={image.alt || `图片 ${index + 1}`} />
+              </button>
+              <button
+                type="button"
+                className="attachment-remove"
+                onClick={() => removeImage(image)}
+                title="删除图片"
+                aria-label={`删除第 ${index + 1} 张图片`}
+              >
+                <CloseIcon size={11} />
+              </button>
+            </div>
+          ))}
+          {uploading && (
+            <div className="attachment attachment-uploading" aria-label="图片上传中">
+              <span className="send-spinner" />
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
         <button type="button" className="md-btn md-bold" title="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
         <button type="button" className="md-btn md-italic" title="斜体 *文字*" data-tip="斜体" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
@@ -554,7 +637,7 @@ export function Composer({
         </button>
         <span className="spacer" />
         <span className="quick-hint">
-          {error ? '' : `${content.trim().length} 字`} · {formatAccelerator('CommandOrControl+Enter')} {memoName ? '保存' : '发送'}
+          {error ? '' : `${textLength} 字`} · {formatAccelerator('CommandOrControl+Enter')} {memoName ? '保存' : '发送'}
         </span>
         {onCancel && (
           <button className="ghost-btn" onClick={onCancel}>取消</button>
@@ -570,6 +653,19 @@ export function Composer({
           {busy ? <span className="send-spinner" /> : memoName ? <CheckMarkIcon size={17} /> : <SendIcon size={17} />}
         </button>
       </div>
+
+      {lightbox && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setLightbox(null)}>
+          <img
+            src={attachmentUrl(lightbox.url)}
+            alt={lightbox.alt || '图片'}
+            onClick={(event) => event.stopPropagation()}
+          />
+          <button className="lightbox-close" onClick={() => setLightbox(null)} title="关闭" aria-label="关闭">
+            <CloseIcon size={18} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

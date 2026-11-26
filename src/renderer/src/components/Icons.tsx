@@ -95,17 +95,19 @@ export function ChevronIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
-/** Paper plane — the composer's send affordance. */
+/** Plain arrow pointing right — the composer's send affordance. */
 export function SendIcon(props: IconProps): JSX.Element {
   return (
     <svg {...base(props)}>
-      <path
-        d="M20.6 3.4 3.9 10.1c-.8.3-.8 1.4 0 1.7l6.2 2.2 2.2 6.2c.3.8 1.4.8 1.7 0z"
-        stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"
-      />
-      <path d="M20.6 3.4 10.1 14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M4.5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
+}
+
+/** Bare cross, for close / remove affordances drawn on a dark chip. */
+export function CloseIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
 }
 
 /** Bare check mark — used where the round accent chip would be too heavy. */
