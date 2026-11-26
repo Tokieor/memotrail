@@ -391,6 +391,11 @@ button {
   display: flex; align-items: center; gap: 5px; color: var(--accent);
 }
 .feed-section-label.pinned-label svg { flex: 0 0 auto; }
+/* Separates the pinned group from the rest without another heading. */
+.feed-divider {
+  height: 1px; margin: 10px 2px;
+  background: var(--border);
+}
 .empty-state {
   padding: 48px 20px; text-align: center; color: var(--faint); font-size: 13px;
   border: 1px dashed var(--border); border-radius: var(--r-card); background: var(--surface);
@@ -525,6 +530,24 @@ button {
 }
 .primary-btn:hover { background: var(--accent-hover); }
 .primary-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Send: an icon-only round button — nothing to read, one obvious target. */
+.send-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; flex: 0 0 30px;
+  border: 0; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent);
+  cursor: pointer; transition: background 0.15s, opacity 0.15s;
+}
+.send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.send-btn:disabled { background: var(--bg-soft); color: var(--faint); cursor: not-allowed; }
+.send-btn svg { display: block; }
+.send-spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .secondary-btn {
   display: inline-flex; align-items: center; justify-content: center;
   height: 30px; padding: 0 12px; border: 1px solid var(--chip-off); border-radius: 6px;

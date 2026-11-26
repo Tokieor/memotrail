@@ -5,8 +5,8 @@ import { fileToBase64, isImage } from '../lib/files'
 import { htmlToMarkdown, renderMarkdown } from '../lib/markdown'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
 import {
-  CodeBlockIcon, CodeIcon, EyeIcon, HeadingIcon, ImageIcon,
-  LinkIcon, ListIcon, QuoteIcon
+  CheckMarkIcon, CodeBlockIcon, CodeIcon, EyeIcon, HeadingIcon, ImageIcon,
+  LinkIcon, ListIcon, QuoteIcon, SendIcon
 } from './Icons'
 import { VisibilityPicker } from './VisibilityPicker'
 
@@ -553,16 +553,21 @@ export function Composer({
           <CodeIcon size={17} />
         </button>
         <span className="spacer" />
-        <span className="quick-hint">{error ? '' : `${content.trim().length} 字`} · {formatAccelerator('CommandOrControl+Enter')} 保存</span>
+        <span className="quick-hint">
+          {error ? '' : `${content.trim().length} 字`} · {formatAccelerator('CommandOrControl+Enter')} {memoName ? '保存' : '发送'}
+        </span>
         {onCancel && (
           <button className="ghost-btn" onClick={onCancel}>取消</button>
         )}
         <button
-          className="primary-btn"
+          className="send-btn"
           onClick={() => void submit()}
           disabled={busy || !content.trim()}
+          title={submitLabel ?? (memoName ? '保存修改' : '发送')}
+          aria-label={submitLabel ?? (memoName ? '保存修改' : '发送')}
+          aria-busy={busy}
         >
-          {busy ? '保存中…' : (submitLabel ?? (memoName ? '保存修改' : '记一笔'))}
+          {busy ? <span className="send-spinner" /> : memoName ? <CheckMarkIcon size={17} /> : <SendIcon size={17} />}
         </button>
       </div>
     </div>

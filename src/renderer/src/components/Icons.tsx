@@ -95,6 +95,24 @@ export function ChevronIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
+/** Paper plane — the composer's send affordance. */
+export function SendIcon(props: IconProps): JSX.Element {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M20.6 3.4 3.9 10.1c-.8.3-.8 1.4 0 1.7l6.2 2.2 2.2 6.2c.3.8 1.4.8 1.7 0z"
+        stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"
+      />
+      <path d="M20.6 3.4 10.1 14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Bare check mark — used where the round accent chip would be too heavy. */
+export function CheckMarkIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M5 12.5 9.7 17.2 19 6.8" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
 export function EyeIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" /></svg>
 }

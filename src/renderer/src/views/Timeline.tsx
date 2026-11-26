@@ -556,8 +556,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                     {pinnedMemos.map(renderMemo)}
                   </>
                 )}
+                {/* No label between the groups — a hairline does the same job with less noise. */}
                 {pinnedMemos.length > 0 && restMemos.length > 0 && (
-                  <div className="feed-section-label">其他</div>
+                  <div className="feed-divider" role="separator" />
                 )}
                 {restMemos.map(renderMemo)}
 
@@ -584,7 +585,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     const result = await window.api.memos.update(memo.name, { pinned: !memo.pinned })
     if (result.success && result.data) {
       setEditing(result.data)
-      // Keep the feed in sync so the note moves between the 置顶 and 其他 groups on return.
+      // Keep the feed in sync so the note moves in or out of the pinned group on return.
       replace(result.data)
     }
   }
