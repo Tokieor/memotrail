@@ -56,27 +56,29 @@ export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSele
 
   return (
     <article className={`note-card${busy ? ' busy' : ''}`}>
-      <div className="tag-row">
-        {(memo.tags ?? []).map((tag) => (
-          <button key={tag} className={`tag-chip ${toneFor(tag)}`} onClick={() => onSelectTag?.(tag)}>
-            <HashChipIcon size={11} />
-            <span>{tag}</span>
-          </button>
-        ))}
-        <span className="spacer" />
-        <div style={{ position: 'relative' }}>
-          <button className="meta-btn" title="更多" onClick={() => setMenuOpen((v) => !v)}>
-            <MoreIcon size={16} />
-          </button>
-          {menuOpen && (
-            <div className="card-menu" onMouseLeave={() => setMenuOpen(false)}>
-              <button className="action-btn" onClick={() => { setMenuOpen(false); onEdit(memo) }}>编辑</button>
-              <button className="action-btn" onClick={() => { setMenuOpen(false); void navigator.clipboard.writeText(memo.content) }}>复制</button>
-              <button className="action-btn danger" onClick={() => { setMenuOpen(false); void remove() }}>删除</button>
-            </div>
-          )}
-        </div>
+      <div className="card-tools">
+        <button className="meta-btn" title="更多" onClick={() => setMenuOpen((v) => !v)}>
+          <MoreIcon size={16} />
+        </button>
+        {menuOpen && (
+          <div className="card-menu" onMouseLeave={() => setMenuOpen(false)}>
+            <button className="action-btn" onClick={() => { setMenuOpen(false); onEdit(memo) }}>编辑</button>
+            <button className="action-btn" onClick={() => { setMenuOpen(false); void navigator.clipboard.writeText(memo.content) }}>复制</button>
+            <button className="action-btn danger" onClick={() => { setMenuOpen(false); void remove() }}>删除</button>
+          </div>
+        )}
       </div>
+
+      {(memo.tags ?? []).length > 0 && (
+        <div className="tag-row tag-row-compact">
+          {(memo.tags ?? []).map((tag) => (
+            <button key={tag} className={`tag-chip ${toneFor(tag)}`} onClick={() => onSelectTag?.(tag)}>
+              <HashChipIcon size={11} />
+              <span>{tag}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
 

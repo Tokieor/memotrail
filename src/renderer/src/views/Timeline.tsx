@@ -181,6 +181,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       <Sidebar
         config={config}
         user={user}
+        memos={memos}
         activeNav={nav}
         activeTag={tag}
         tags={allTags}

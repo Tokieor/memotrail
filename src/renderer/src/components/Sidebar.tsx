@@ -1,4 +1,5 @@
-import type { AppConfig, User } from '@shared/types'
+import type { AppConfig, Memo, User } from '@shared/types'
+import { ContributionHeatmap } from './ContributionHeatmap'
 import {
   ArchiveIcon,
   CalendarIcon,
@@ -17,6 +18,7 @@ const TAG_TONES = ['#5C7F6F', '#C99A5B', '#7B96B0', '#B98C88', '#5C7F6F', '#C99A
 interface Props {
   config: AppConfig
   user: User
+  memos: Memo[]
   activeNav: NavKey
   activeTag: string | null
   tags: [string, number][]
@@ -29,7 +31,7 @@ interface Props {
 }
 
 export function Sidebar({
-  config, user, activeNav, activeTag, tags, counts, sync,
+  config, user, memos, activeNav, activeTag, tags, counts, sync,
   onNewNote, onNavigate, onSelectTag, onOpenSettings
 }: Props): JSX.Element {
   const serverHost = config.serverUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
@@ -43,11 +45,7 @@ export function Sidebar({
         <span className="brand-sub">MEMOS DESKTOP</span>
       </div>
 
-      <button className="new-note-btn" onClick={onNewNote}>
-        <PlusIcon size={18} />
-        <span>新建笔记</span>
-        <span className="kbd">Ctrl/⌘+N</span>
-      </button>
+      <ContributionHeatmap memos={memos} />
 
       <nav className="nav-list">
         <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag} onClick={() => onNavigate('all')} />
