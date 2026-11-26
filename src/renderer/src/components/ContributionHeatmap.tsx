@@ -23,14 +23,12 @@ const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8
 export function ContributionHeatmap({ memos, weeks = 16 }: Props): JSX.Element {
   const { cells, monthMarks, total } = useMemo(() => {
     const counts = new Map<string, number>()
-    let total = 0
     for (const memo of memos) {
       if (!memo.createTime) continue
       const date = new Date(memo.createTime)
       if (Number.isNaN(date.getTime())) continue
       const key = localKey(date)
       counts.set(key, (counts.get(key) ?? 0) + 1)
-      total += 1
     }
 
     // Start from the Monday of the current week, then go back (weeks - 1) weeks.
@@ -44,6 +42,7 @@ export function ContributionHeatmap({ memos, weeks = 16 }: Props): JSX.Element {
 
     const cells: DayCell[] = []
     const monthMarks: { col: number; label: string }[] = []
+    let total = 0
     let lastMonth = -1
     for (let col = 0; col < weeks; col++) {
       for (let row = 0; row < 7; row++) {
@@ -55,6 +54,7 @@ export function ContributionHeatmap({ memos, weeks = 16 }: Props): JSX.Element {
           monthMarks.push({ col, label: MONTH_LABELS[lastMonth] })
         }
         const count = counts.get(localKey(date)) ?? 0
+        total += count
         const level = count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count === 3 ? 3 : 4
         cells.push({ key: localKey(date), date, count, level })
       }

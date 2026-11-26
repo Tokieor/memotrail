@@ -131,11 +131,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [load])
 
-  const allTags = useMemo(() => {
+  // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
+  const [tagCatalog, setTagCatalog] = useState<[string, number][]>([])
+  useEffect(() => {
+    if (tag || debouncedQuery) return
     const counts = new Map<string, number>()
     for (const memo of memos) for (const name of memo.tags ?? []) counts.set(name, (counts.get(name) ?? 0) + 1)
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
-  }, [memos])
+    setTagCatalog(
+      [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12)
+    )
+  }, [memos, tag, debouncedQuery])
 
   const visibleMemos = useMemo(() => {
     if (nav === 'today') return memos.filter(isToday)
@@ -184,7 +189,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         memos={memos}
         activeNav={nav}
         activeTag={tag}
-        tags={allTags}
+        tags={tagCatalog}
         counts={counts}
         sync={{ state: syncState, label: syncLabel, detail: `${serverHost} · ${memos.length} 条笔记` }}
         onNewNote={() => { setView('feed'); setEditing(null); setComposerFocus((t) => t + 1) }}

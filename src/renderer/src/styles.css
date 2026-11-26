@@ -125,7 +125,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 16px;
+  padding: 38px 16px 16px;
   background: var(--bg-soft);
   overflow-y: auto;
 }

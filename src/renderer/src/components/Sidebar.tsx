@@ -56,7 +56,7 @@ export function Sidebar({
 
       <div className="section-label" style={{ marginTop: 12 }}>
         <span>标签</span>
-        <button className="section-action" title="新建标签（在笔记中用 #标签）" onClick={onNewNote}>
+        <button className="section-action" title="写一条带 #标签 的笔记（标签在正文里用 # 创建）" onClick={onNewNote}>
           <PlusIcon size={16} />
         </button>
       </div>
