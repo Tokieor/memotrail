@@ -541,7 +541,7 @@ button {
   border-bottom: 1px solid var(--border);
 }
 .quick-header .title { flex: 1; font-size: 13px; font-weight: 600; color: var(--ink); }
-.quick-body-area { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.quick-body-area { position: relative; flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 .quick-body-area textarea { flex: 1; width: 100%; resize: none; border: 0; outline: 0; background: transparent; font: 15px/26px var(--font-sans); color: var(--ink); }
 .quick-body-area textarea::placeholder { color: var(--faint); }
 .quick-footer {
@@ -615,10 +615,10 @@ button {
 .composer-input { position: relative; }
 .tag-suggest {
   position: absolute;
-  left: 6px;
-  right: 6px;
-  top: calc(100% - 4px);
   z-index: 40;
+  width: max-content;
+  min-width: 88px;
+  max-width: 220px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -633,7 +633,11 @@ button {
 .tag-suggest-item {
   display: flex;
   align-items: center;
+  max-width: 212px;
   height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 9px;
   border: 0;
   border-radius: 6px;

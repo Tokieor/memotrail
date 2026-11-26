@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { fileToBase64, isImage } from '../lib/files'
+import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
 import { ImageIcon, LinkIcon, TagIcon } from './Icons'
 
 interface Props {
@@ -48,28 +49,26 @@ export function Composer({
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
-  const [suggest, setSuggest] = useState<{ start: number; query: string; index: number } | null>(null)
+  const [suggest, setSuggest] = useState<{ start: number; query: string; index: number; point: CaretPoint } | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  const options = (() => {
-    if (!suggest) return [] as string[]
-    const query = suggest.query.toLowerCase()
-    return tagSuggestions
-      .filter((tag) => tag.toLowerCase().includes(query))
-      .sort((a, b) => Number(a.toLowerCase() !== query) - Number(b.toLowerCase() !== query))
-      .slice(0, 8)
-  })()
+  const options = suggest ? filterTags(tagSuggestions, suggest.query) : []
 
-  /** Opens the tag menu when the caret sits right after `#部分文字`. */
+  /** Opens the tag menu anchored under the `#` the caret is sitting on. */
   function syncSuggest(value: string, caret: number): void {
-    const match = value.slice(0, caret).match(/(?:^|\s)#([\p{L}\p{N}_\-/]*)$/u)
-    if (!match) {
+    const element = ref.current
+    const query = findTagQuery(value, caret)
+    if (!query || !element) {
       setSuggest(null)
       return
     }
-    const start = caret - match[1].length - 1
-    setSuggest((prev) => ({ start, query: match[1], index: prev && prev.start === start ? prev.index : 0 }))
+    const point = caretPoint(element, caret)
+    setSuggest((prev) => ({
+      ...query,
+      index: prev && prev.start === query.start ? Math.min(prev.index, 7) : 0,
+      point
+    }))
   }
 
   function applyTag(tag: string): void {
@@ -218,8 +217,17 @@ export function Composer({
         onDragOver={(e) => e.preventDefault()}
       />
 
-      {suggest && options.length > 0 && (
-        <div className="tag-suggest" role="listbox">
+      {suggest && options.length > 0 && (() => {
+        const { point } = suggest
+        const boxWidth = 200
+        const maxLeft = Math.max(4, (ref.current?.clientWidth ?? boxWidth) - boxWidth)
+        const left = Math.max(4, Math.min(point.left, maxLeft))
+        const flipUp = point.top > point.height * 0.55
+        const placement = flipUp
+          ? { left, bottom: point.height - point.top + 4 }
+          : { left, top: point.top + point.lineHeight + 4 }
+        return (
+        <div className="tag-suggest" role="listbox" style={placement}>
           {options.map((tag, index) => (
             <button
               key={tag}
@@ -234,7 +242,8 @@ export function Composer({
             </button>
           ))}
         </div>
-      )}
+        )
+      })()}
       </div>
 
       {error && <p className="inline-error" style={{ margin: '4px 0 8px' }}>{error}</p>}
@@ -257,7 +266,10 @@ export function Composer({
           onClick={() => {
             const position = ref.current?.selectionStart ?? content.length
             insertAtCursor('#')
-            if (tagSuggestions.length > 0) setSuggest({ start: position, query: '', index: 0 })
+            const element = ref.current
+            if (element && tagSuggestions.length > 0) {
+              setSuggest({ start: position, query: '', index: 0, point: caretPoint(element, position + 1) })
+            }
           }}
           title="插入标签"
         >
