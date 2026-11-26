@@ -39,7 +39,7 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="brand-row">
         <LogoMark size={28} />
-        <span className="brand-name">轻笺</span>
+        <span className="brand-name">MemoTrail</span>
         <span className="brand-sub">MEMOS DESKTOP</span>
       </div>
 

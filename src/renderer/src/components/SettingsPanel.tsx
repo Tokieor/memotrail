@@ -215,9 +215,9 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
 
         {section === 'about' && (
           <div className="settings-card">
-            <h3 className="settings-card-title">关于 轻笺</h3>
+            <h3 className="settings-card-title">关于 MemoTrail</h3>
             <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
-              轻笺 · Memos Desktop<br />
+              MemoTrail · Memos Desktop<br />
               一个简洁、轻量的 Memos 第三方桌面客户端。<br />
               版本 0.1.0 · Electron + React 18
             </p>

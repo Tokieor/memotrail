@@ -36,7 +36,7 @@ export function SignIn({ config, onSignedIn }: Props): JSX.Element {
         <div className="signin-brand">
           <LogoMark size={40} />
           <div>
-            <h1>轻笺</h1>
+            <h1>MemoTrail</h1>
             <p>MEMOS DESKTOP</p>
           </div>
         </div>
