@@ -16,9 +16,15 @@ if (!app.requestSingleInstanceLock()) {
     showMainWindow()
   })
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     const config = loadConfig()
-    if (config.serverUrl) memos.setBaseUrl(config.serverUrl)
+    if (config.serverUrl) {
+      memos.setBaseUrl(config.serverUrl)
+      // The refresh token is an HttpOnly cookie kept by the persistent session, so a restart can
+      // restore the session without asking for the password again.
+      const restored = await memos.refresh()
+      if (!restored.success) console.warn('[memotrail] no stored session:', restored.error)
+    }
 
     handleFileProtocol()
     registerIpc()
