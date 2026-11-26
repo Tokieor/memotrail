@@ -29,6 +29,18 @@ export function CalendarIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" /><path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
 }
 
+export function LockIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><rect x="4.5" y="10" width="15" height="10" rx="2.4" stroke="currentColor" strokeWidth="1.7" /><path d="M8 10V7.6a4 4 0 0 1 8 0V10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+}
+
+export function ShieldIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M12 3l7 2.6v5.6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V5.6z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
+}
+
+export function GlobeIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><circle cx="12" cy="12" r="8.4" stroke="currentColor" strokeWidth="1.7" /><path d="M3.6 12h16.8M12 3.6c2.2 2.4 3.4 5.3 3.4 8.4s-1.2 6-3.4 8.4c-2.2-2.4-3.4-5.3-3.4-8.4s1.2-6 3.4-8.4z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+}
+
 export function StarIcon({ filled, ...props }: IconProps & { filled?: boolean }): JSX.Element {
   return <svg {...base(props)}><path d="M12 3l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.8l6.5-.9z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" fill={filled ? 'currentColor' : 'none'} /></svg>
 }

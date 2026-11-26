@@ -4,6 +4,7 @@ import { formatAccelerator } from '../lib/accelerator'
 import { fileToBase64, isImage } from '../lib/files'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
 import { ImageIcon, LinkIcon } from './Icons'
+import { VisibilityPicker } from './VisibilityPicker'
 
 interface Props {
   /** When set the composer edits an existing memo instead of creating one. */
@@ -24,12 +25,6 @@ interface Props {
 }
 
 const DRAFT_KEY = 'memotrail.composer.draft'
-
-const VISIBILITIES: { value: Visibility; label: string }[] = [
-  { value: 'PRIVATE', label: '私密' },
-  { value: 'PROTECTED', label: '受保护' },
-  { value: 'PUBLIC', label: '公开' }
-]
 
 export function Composer({
   memoName,
@@ -252,18 +247,9 @@ export function Composer({
       {!isEditor && <div className="composer-divider" />}
 
       <div className="composer-footer">
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value as Visibility)}
-          className="visibility-select"
-          title="可见范围"
-        >
-          {VISIBILITIES.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
-          ))}
-        </select>
+        <VisibilityPicker value={visibility} onChange={setVisibility} />
         <button
-          className="tool-btn"
+          className="tool-btn plain"
           onClick={() => {
             const position = ref.current?.selectionStart ?? content.length
             insertAtCursor('#')
@@ -274,7 +260,7 @@ export function Composer({
           }}
           title="插入标签 #"
         >
-          <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>#</span>
+          <span style={{ fontSize: 15, lineHeight: 1 }}>#</span>
         </button>
         <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件">
           <ImageIcon size={17} />

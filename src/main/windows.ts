@@ -1,5 +1,6 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
+import { loadWindowState, saveWindowState } from './config'
 
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
 
@@ -13,9 +14,10 @@ export function broadcast(channel: string, payload?: unknown): void {
 }
 
 export function createMainWindow(): BrowserWindow {
+  const saved = loadWindowState()
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: saved?.width ?? 1280,
+    height: saved?.height ?? 800,
     minWidth: 760,
     minHeight: 460,
     show: false,
@@ -30,6 +32,22 @@ export function createMainWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // Remember the size the user left the window at (debounced, and again on close).
+  let resizeTimer: NodeJS.Timeout | null = null
+  const persistSize = (): void => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return
+    const [width, height] = win.getSize()
+    saveWindowState({ width, height })
+  }
+  win.on('resize', () => {
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(persistSize, 400)
+  })
+  win.on('close', () => {
+    if (resizeTimer) clearTimeout(resizeTimer)
+    persistSize()
+  })
 
   // Links open in the user's browser, never in an app window.
   win.webContents.setWindowOpenHandler(({ url }) => {

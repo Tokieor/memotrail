@@ -528,10 +528,13 @@ button {
 
 .pref-row {
   display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
   min-height: 58px; padding: 10px 0; border-bottom: 1px solid var(--divider);
 }
 .pref-row:last-child { border-bottom: 0; }
-.pref-meta { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.pref-meta { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pref-row .segmented { flex: 0 0 auto; }
+.pref-row .segmented button { white-space: nowrap; }
 .pref-title { font-size: 12px; font-weight: 500; color: var(--ink); }
 .pref-sub { font-size: 10px; color: var(--faint); }
 .select-btn {
@@ -899,3 +902,13 @@ button {
   position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%);
   width: 3px; height: 3px; border-radius: 50%; background: currentColor;
 }
+
+/* Visibility: three icon buttons instead of a text dropdown */
+.visibility-picker { display: inline-flex; align-items: center; gap: 2px; }
+.visibility-picker button {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  border: 0; border-radius: 6px; background: transparent; color: var(--faint);
+  cursor: pointer; padding: 0; transition: background 0.12s ease, color 0.12s ease;
+}
+.visibility-picker button:hover { background: var(--tint-hover); color: var(--body); }
+.visibility-picker button.active { background: var(--tint-active); color: var(--ink); }

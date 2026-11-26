@@ -13,7 +13,14 @@ const DEFAULTS: AppConfig = {
   sidebarCard: 'heatmap'
 }
 
+/** Last main-window size, kept out of the renderer-facing config. */
+export interface WindowState {
+  width: number
+  height: number
+}
+
 interface StoredConfig extends AppConfig {
+  windowState?: WindowState
   /** base64 of the OS-encrypted `memos_refresh` cookie; never handed to the renderer. */
   refreshToken?: string
 }
@@ -41,7 +48,10 @@ function read(): StoredConfig {
       theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
-      ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {})
+      ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {}),
+      ...(raw.windowState && typeof raw.windowState.width === 'number' && typeof raw.windowState.height === 'number'
+        ? { windowState: { width: raw.windowState.width, height: raw.windowState.height } }
+        : {})
     }
   } catch {
     cached = { ...DEFAULTS }
@@ -58,7 +68,7 @@ function write(next: StoredConfig): void {
 
 /** The renderer only ever sees the non-secret part of the config. */
 export function loadConfig(): AppConfig {
-  const { refreshToken: _secret, ...publicPart } = read()
+  const { refreshToken: _secret, windowState: _window, ...publicPart } = read()
   return publicPart
 }
 
@@ -87,6 +97,31 @@ export function saveRefreshToken(token: string | null): void {
   } else {
     // Linux without a keyring: keep it in memory only rather than writing plaintext.
     delete next.refreshToken
+  }
+  write(next)
+}
+
+const MIN_WIDTH = 760
+const MIN_HEIGHT = 460
+
+/** Restores the last window size, clamped to the minimums enforced by the window itself. */
+export function loadWindowState(): WindowState | null {
+  const state = read().windowState
+  if (!state) return null
+  return {
+    width: Math.max(MIN_WIDTH, Math.round(state.width)),
+    height: Math.max(MIN_HEIGHT, Math.round(state.height))
+  }
+}
+
+export function saveWindowState(state: WindowState): void {
+  const current = read()
+  const next: StoredConfig = {
+    ...current,
+    windowState: {
+      width: Math.max(MIN_WIDTH, Math.round(state.width)),
+      height: Math.max(MIN_HEIGHT, Math.round(state.height))
+    }
   }
   write(next)
 }

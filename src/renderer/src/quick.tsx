@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { BoltIcon, ImageIcon, LinkIcon } from './components/Icons'
+import { VisibilityPicker } from './components/VisibilityPicker'
 import { formatAccelerator } from './lib/accelerator'
 import { applyCachedTheme, applyTheme, watchSystemAppearance } from './lib/theme'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from './lib/tag-suggest'
@@ -232,16 +233,7 @@ function QuickCapture(): JSX.Element {
         ><span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>#</span></button>
         <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片"><ImageIcon size={16} /></button>
         <button className="tool-btn plain" onClick={() => insertAtCursor('[]()')} title="插入链接"><LinkIcon size={16} /></button>
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value as Visibility)}
-          className="visibility-select"
-          title="可见范围"
-        >
-          {(Object.keys(VISIBILITY_LABEL) as Visibility[]).map((key) => (
-            <option key={key} value={key}>{VISIBILITY_LABEL[key]}</option>
-          ))}
-        </select>
+        <VisibilityPicker value={visibility} onChange={setVisibility} size={15} />
         <span className="spacer" />
         <span className={`quick-hint${state === 'error' ? ' inline-error' : ''}`}>
           {configured === false
