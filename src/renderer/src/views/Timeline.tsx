@@ -243,17 +243,13 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
             </header>
             <div className="feed-scroll">
               <div className="editor-card">
-                <div className="tag-row" style={{ marginBottom: 4 }}>
-                  {(editing.tags ?? []).map((t) => (
-                    <span key={t} className="tag-chip green"><span>{t}</span></span>
-                  ))}
-                </div>
                 <Composer
                   key={editing.name}
                   memoName={editing.name}
                   initialContent={editing.content}
                   initialVisibility={editing.visibility}
                   variant="editor"
+                  tagSuggestions={tagCatalog.map(([name]) => name)}
                   autoFocus
                   onSubmitted={(memo) => { replace(memo); setEditing(null) }}
                   onCancel={() => setEditing(null)}
@@ -302,6 +298,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
                 <Composer
                   focusSignal={composerFocus}
+                  tagSuggestions={tagCatalog.map(([name]) => name)}
                   onSubmitted={(memo) => setMemos((current) => [memo, ...current])}
                 />
 

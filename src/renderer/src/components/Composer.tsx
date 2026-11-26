@@ -14,6 +14,8 @@ interface Props {
   focusSignal?: number
   /** 'feed' = inline quick capture; 'editor' = full detail/edit card. */
   variant?: 'feed' | 'editor'
+  /** Most-used tags offered after typing `#`. */
+  tagSuggestions?: string[]
   /** Called when the visibility selector changes, so the editor can reflect it. */
   onSubmitted: (memo: Memo) => void
   onCancel?: () => void
@@ -35,6 +37,7 @@ export function Composer({
   focusSignal = 0,
   submitLabel,
   variant = 'feed',
+  tagSuggestions = [],
   onSubmitted,
   onCancel
 }: Props): JSX.Element {
@@ -45,8 +48,43 @@ export function Composer({
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
+  const [suggest, setSuggest] = useState<{ start: number; query: string; index: number } | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  const options = (() => {
+    if (!suggest) return [] as string[]
+    const query = suggest.query.toLowerCase()
+    return tagSuggestions
+      .filter((tag) => tag.toLowerCase().includes(query))
+      .sort((a, b) => Number(a.toLowerCase() !== query) - Number(b.toLowerCase() !== query))
+      .slice(0, 8)
+  })()
+
+  /** Opens the tag menu when the caret sits right after `#部分文字`. */
+  function syncSuggest(value: string, caret: number): void {
+    const match = value.slice(0, caret).match(/(?:^|\s)#([\p{L}\p{N}_\-/]*)$/u)
+    if (!match) {
+      setSuggest(null)
+      return
+    }
+    const start = caret - match[1].length - 1
+    setSuggest((prev) => ({ start, query: match[1], index: prev && prev.start === start ? prev.index : 0 }))
+  }
+
+  function applyTag(tag: string): void {
+    const element = ref.current
+    if (!suggest || !element) return
+    const caret = element.selectionStart
+    const next = `${content.slice(0, suggest.start)}#${tag} ${content.slice(caret)}`
+    const position = suggest.start + tag.length + 2
+    setContent(next)
+    setSuggest(null)
+    requestAnimationFrame(() => {
+      element.focus()
+      element.setSelectionRange(position, position)
+    })
+  }
 
   useEffect(() => {
     setContent(initialContent)
@@ -127,11 +165,33 @@ export function Composer({
 
   return (
     <div className={isEditor ? 'editor-composer' : 'composer'}>
+      <div className="composer-input">
       <textarea
         ref={ref}
         value={content}
-        onChange={(e) => setContent(e.target.value)}
+        onChange={(e) => {
+          setContent(e.target.value)
+          syncSuggest(e.target.value, e.target.selectionStart ?? e.target.value.length)
+        }}
         onKeyDown={(e) => {
+          if (suggest && options.length > 0) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault()
+              const step = e.key === 'ArrowDown' ? 1 : -1
+              setSuggest((prev) => prev && { ...prev, index: (prev.index + step + options.length) % options.length })
+              return
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault()
+              applyTag(options[Math.min(suggest.index, options.length - 1)])
+              return
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              setSuggest(null)
+              return
+            }
+          }
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
             e.preventDefault()
             void submit()
@@ -158,6 +218,25 @@ export function Composer({
         onDragOver={(e) => e.preventDefault()}
       />
 
+      {suggest && options.length > 0 && (
+        <div className="tag-suggest" role="listbox">
+          {options.map((tag, index) => (
+            <button
+              key={tag}
+              type="button"
+              role="option"
+              aria-selected={index === suggest.index}
+              className={`tag-suggest-item${index === suggest.index ? ' active' : ''}`}
+              onMouseDown={(e) => { e.preventDefault(); applyTag(tag) }}
+              onMouseEnter={() => setSuggest((prev) => prev && { ...prev, index })}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
+      </div>
+
       {error && <p className="inline-error" style={{ margin: '4px 0 8px' }}>{error}</p>}
 
       {!isEditor && <div className="composer-divider" />}
@@ -173,7 +252,15 @@ export function Composer({
             <option key={item.value} value={item.value}>{item.label}</option>
           ))}
         </select>
-        <button className="tool-btn" onClick={() => insertAtCursor('#')} title="插入标签">
+        <button
+          className="tool-btn"
+          onClick={() => {
+            const position = ref.current?.selectionStart ?? content.length
+            insertAtCursor('#')
+            if (tagSuggestions.length > 0) setSuggest({ start: position, query: '', index: 0 })
+          }}
+          title="插入标签"
+        >
           <TagIcon size={13} /><span>标签</span>
         </button>
         <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件">

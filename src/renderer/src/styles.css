@@ -610,3 +610,37 @@ button {
   cursor: pointer;
 }
 .md-tag:hover { background: rgba(92, 127, 111, 0.2); }
+
+/* Tag autocomplete: opens under the textarea when `#` is typed. */
+.composer-input { position: relative; }
+.tag-suggest {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: calc(100% - 4px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  max-height: 208px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgba(28, 30, 27, 0.12);
+}
+.tag-suggest-item {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.tag-suggest-item.active { background: rgba(92, 127, 111, 0.13); }
