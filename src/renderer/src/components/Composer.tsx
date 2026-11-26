@@ -43,6 +43,54 @@ interface DraftImage {
   end: number
 }
 
+const BLOCK_TAGS = ['P', 'DIV', 'LI', 'BLOCKQUOTE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'PRE', 'UL', 'OL']
+
+function isBlockEl(node: Node | null): node is HTMLElement {
+  return !!node && node.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.includes((node as Element).tagName)
+}
+
+/** Tag aliases per format, so `<b>` from imported content behaves like our `<strong>`. */
+const MARK_GROUPS = {
+  bold: ['strong', 'b'],
+  italic: ['em', 'i'],
+  strike: ['s', 'del', 'strike'],
+  underline: ['u', 'ins'],
+  code: ['code'],
+  link: ['a']
+} as const
+
+/** Inline marks that must never bleed into whatever gets typed next. */
+const INLINE_MARKS = ['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'code', 'a']
+
+function isMarkEl(node: Node | null): node is HTMLElement {
+  return (
+    !!node &&
+    node.nodeType === Node.ELEMENT_NODE &&
+    INLINE_MARKS.includes((node as Element).tagName.toLowerCase())
+  )
+}
+
+/**
+ * Outermost inline mark wrapping `node` — `<b><u>x</u></b>` resolves to `<b>` so escaping lands
+ * outside every layer at once. `root` bounds the walk to the editable surface.
+ */
+function outermostMark(node: Node | null, root: HTMLElement): HTMLElement | null {
+  let cursor: Node | null = node
+  let found: HTMLElement | null = null
+  while (cursor && cursor !== root) {
+    if (isMarkEl(cursor)) found = cursor
+    cursor = cursor.parentNode
+  }
+  return found
+}
+
+function selectRange(range: Range): void {
+  const selection = window.getSelection()
+  if (!selection) return
+  selection.removeAllRanges()
+  selection.addRange(range)
+}
+
 /**
  * Images are found in source order, so the strip below the editor always mirrors what will be
  * published — posting keeps the order and removing one entry only deletes its own token.
@@ -82,6 +130,8 @@ export function Composer({
   const ref = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  /** Inline mark an IME composition is about to type into, plus its text before composing. */
+  const composeGuard = useRef<{ mark: HTMLElement; before: string } | null>(null)
   const contentRef = useRef(content)
   contentRef.current = content
 
@@ -150,6 +200,28 @@ export function Composer({
     if (focusSignal > 0) (mode === 'source' ? ref.current : previewRef.current)?.focus()
   }, [focusSignal, mode])
 
+  /**
+   * Native `beforeinput` (React only synthesises one from `textInput`, which cannot cancel the
+   * edit). Taking over here is what keeps a character typed right after a formatted run plain.
+   */
+  useEffect(() => {
+    const el = previewRef.current
+    if (mode !== 'preview' || !el) return
+    function onBeforeInput(event: Event): void {
+      const native = event as InputEvent
+      if (native.inputType !== 'insertText' || !native.data) return
+      const root = previewRef.current
+      if (!root) return
+      const mark = markSwallowingNextChar(root)
+      if (!mark) return
+      event.preventDefault()
+      insertPlainAfter(mark, native.data)
+    }
+    el.addEventListener('beforeinput', onBeforeInput)
+    return () => el.removeEventListener('beforeinput', onBeforeInput)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
   // Unsubmitted new memos survive a window reload.
   useEffect(() => {
     if (memoName) return
@@ -207,11 +279,45 @@ export function Composer({
     })
   }
 
+  /** IME text cannot be cancelled, so remember the mark it would land in. */
+  function beginComposition(): void {
+    const root = previewRef.current
+    if (!root) return
+    const mark = markSwallowingNextChar(root)
+    composeGuard.current = mark ? { mark, before: mark.textContent ?? '' } : null
+  }
+
+  /** After composing, peel the composed characters back out of the mark as plain text. */
+  function finishComposition(): void {
+    const guard = composeGuard.current
+    composeGuard.current = null
+    const root = previewRef.current
+    if (!root || !guard || !guard.mark.isConnected) return
+    const after = guard.mark.textContent ?? ''
+    if (!after.startsWith(guard.before) || after.length === guard.before.length) return
+    const extra = after.slice(guard.before.length)
+    let remaining = extra.length
+    while (remaining > 0) {
+      const last = lastTextNode(guard.mark)
+      if (!last) break
+      const take = Math.min(remaining, last.data.length)
+      last.deleteData(last.data.length - take, take)
+      remaining -= take
+    }
+    insertPlainAfter(guard.mark, extra)
+    if ((guard.mark.textContent ?? '').length === 0) {
+      guard.mark.remove()
+      setContent(htmlToMarkdown(root.innerHTML))
+    }
+  }
+
   function insertAtCursor(text: string): void {
     if (mode === 'preview') {
       const el = previewRef.current
       if (!el) return
       el.focus()
+      // Keep the insertion out of a trailing mark, otherwise a `#` ends up underlined.
+      escapeTrailingMark(el)
       document.execCommand('insertHTML', false, renderMarkdown(text))
       setContent(htmlToMarkdown(el.innerHTML))
       return
@@ -226,78 +332,356 @@ export function Composer({
     })
   }
 
-  /**
-   * Moves the caret to just after `node` so subsequent typing is not swallowed by an active
-   * inline format (the classic contenteditable "everything stays bold" bug).
-   */
-  function placeCaretAfter(node: Node): void {
-    const range = document.createRange()
-    range.setStartAfter(node)
-    range.collapse(true)
-    const selection = window.getSelection()
-    if (!selection) return
-    selection.removeAllRanges()
-    selection.addRange(range)
+  /** Nearest ancestor carrying one of `group`'s tags, bounded by the editable surface. */
+  function sameTagAncestor(node: Node | null, root: HTMLElement, group: readonly string[]): HTMLElement | null {
+    let cursor: Node | null = node
+    while (cursor && cursor !== root) {
+      if (isMarkEl(cursor) && group.includes(cursor.tagName.toLowerCase())) return cursor
+      cursor = cursor.parentNode
+    }
+    return null
   }
 
-  /** After formatting a selection, park the caret outside the styled element and clear the state. */
-  function settleAfterInline(tagNames: string[]): void {
+  /**
+   * Parks a collapsed caret right after `node`, inside a real text node. A caret expressed as
+   * "block, offset after the inline element" looks the same but Chrome resolves it *into* that
+   * element when a key is pressed, which is how the format kept spreading. A text node leaves
+   * no room for that guess.
+   */
+  function placeCaretAfterPlain(node: Node): boolean {
+    const parent = node.parentNode
+    if (!parent) return false
+    const next = node.nextSibling
+    const pad = next && next.nodeType === Node.TEXT_NODE ? next : document.createTextNode('')
+    if (!pad.parentNode) parent.insertBefore(pad, next)
+    const range = document.createRange()
+    range.setStart(pad, 0)
+    range.collapse(true)
+    selectRange(range)
+    return true
+  }
+
+  /**
+   * The actual cure for "typing after formatted text inherits the format": with a collapsed
+   * caret sitting on a mark's last character, Chrome treats the mark as the *typing style* and
+   * keeps everything you type inside it. Stepping the caret past the mark first makes the next
+   * character plain. Returns true when the caret had to move.
+   */
+  function escapeTrailingMark(root: HTMLElement | null): boolean {
+    if (!root) return false
+    const selection = window.getSelection()
+    if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return false
+    const range = selection.getRangeAt(0)
+    const { startContainer, startOffset } = range
+    if (!root.contains(startContainer)) return false
+    const atEnd = startContainer.nodeType === Node.TEXT_NODE
+      ? startOffset === (startContainer.textContent ?? '').length
+      : startOffset === startContainer.childNodes.length
+    if (!atEnd) return false
+    const mark = outermostMark(startContainer, root)
+    if (!mark) return false
+    // Leave the caret alone while the mark still has styled content after it — jumping out
+    // there would drop the caret behind text the user is legitimately still inside.
+    const tail = document.createRange()
+    tail.setStart(range.endContainer, range.endOffset)
+    tail.setEndAfter(mark)
+    if (tail.toString().length > 0) return false
+    return placeCaretAfterPlain(mark)
+  }
+
+  /** Releases a mark's children into its parent and parks the caret after them (plain again). */
+  function unwrapMark(mark: HTMLElement): void {
+    const parent = mark.parentNode
+    if (!parent) return
+    const last = mark.lastChild
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark)
+    parent.removeChild(mark)
+    if (last) placeCaretAfterPlain(last)
+    else {
+      const range = document.createRange()
+      range.setStart(parent, parent.childNodes.length)
+      range.collapse(true)
+      selectRange(range)
+    }
+  }
+
+  /** Nearest block container, so two carets can be compared by "same paragraph". */
+  function blockOf(node: Node, root: HTMLElement): HTMLElement {
+    let cursor: HTMLElement | null = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement
+    while (cursor && cursor !== root) {
+      if (BLOCK_TAGS.includes(cursor.tagName)) return cursor
+      cursor = cursor.parentElement
+    }
+    return root
+  }
+
+  /** Last text node holding real content before `caret` (whitespace-only nodes are skipped). */
+  function previousTextBefore(root: HTMLElement, caret: Range): Text | null {
+    const start = caret.startContainer
+    if (start.nodeType === Node.TEXT_NODE && caret.startOffset > 0 && (start as Text).data.trim().length > 0) {
+      return start as Text
+    }
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    let previous: Text | null = null
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node as Text
+      const span = document.createRange()
+      span.setStart(text, 0)
+      span.setEnd(text, text.data.length)
+      if (span.compareBoundaryPoints(Range.END_TO_START, caret) > 0) break
+      if (text.data.trim().length > 0) previous = text
+    }
+    return previous
+  }
+
+  /**
+   * Chrome resolves a collapsed caret that sits at the end of a block whose last child is an
+   * inline mark *back into that mark*, then uses the mark as the typing style — which is why a
+   * note keeps gaining underline/bold after a formatted word. No placeholder (empty text node,
+   * empty span, invisible char) survives that resolution, so the character has to be inserted
+   * by hand. Returns the mark that would swallow it, or null when typing is already safe.
+   */
+  function markSwallowingNextChar(root: HTMLElement): HTMLElement | null {
+    const selection = window.getSelection()
+    if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return null
+    const caret = selection.getRangeAt(0)
+    if (!root.contains(caret.startContainer)) return null
+    // Only at the end of a run: anything meaningful after the caret means we are inside it.
+    const rest = document.createRange()
+    rest.setStart(caret.startContainer, caret.startOffset)
+    rest.setEnd(root, root.childNodes.length)
+    if (rest.toString().trim().length > 0) return null
+    const previous = previousTextBefore(root, caret)
+    if (!previous) return null
+    if (blockOf(previous, root) !== blockOf(caret.startContainer, root)) return null
+    return outermostMark(previous, root)
+  }
+
+  /** Types into a plain text node right after `mark`, sidestepping the browser's resolution. */
+  function insertPlainAfter(mark: HTMLElement, text: string): void {
+    const parent = mark.parentNode
+    if (!parent) return
+    const selection = window.getSelection()
+    let node: Text | null = null
+    let index = 0
+    if (selection && selection.isCollapsed && selection.rangeCount > 0) {
+      const caret = selection.getRangeAt(0)
+      const holder = caret.startContainer
+      // The caret may already sit in plain text that follows the mark (e.g. a typed space).
+      // A caret *inside* the mark reports FOLLOWING too, so descendants must be excluded.
+      const relation = mark.compareDocumentPosition(holder)
+      const outside = (relation & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+        (relation & Node.DOCUMENT_POSITION_CONTAINED_BY) === 0
+      if (holder.nodeType === Node.TEXT_NODE && outside) {
+        node = holder as Text
+        index = caret.startOffset
+      }
+    }
+    if (!node) {
+      const next = mark.nextSibling
+      node = next && next.nodeType === Node.TEXT_NODE ? (next as Text) : document.createTextNode('')
+      if (!node.parentNode) parent.insertBefore(node, next)
+      index = 0
+    }
+    node.insertData(index, text)
+    const range = document.createRange()
+    range.setStart(node, index + text.length)
+    range.collapse(true)
+    selectRange(range)
+    const root = previewRef.current
+    if (root) setContent(htmlToMarkdown(root.innerHTML))
+  }
+
+  /** Deepest trailing text node of `element`, used to peel composed characters back out. */
+  function lastTextNode(element: HTMLElement): Text | null {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let last: Text | null = null
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) last = node as Text
+    return last && last.data.length > 0 ? last : null
+  }
+
+  /** Leaf block elements of the editable, so a multi-line selection can be formatted per line. */
+  function leafBlocks(root: HTMLElement): HTMLElement[] {
+    const out: HTMLElement[] = []
+    const walk = (node: HTMLElement): void => {
+      for (const child of Array.from(node.children) as HTMLElement[]) {
+        if (!isBlockEl(child)) continue
+        const nested = (Array.from(child.children) as HTMLElement[]).some((c) => isBlockEl(c))
+        if (nested) walk(child)
+        else out.push(child)
+      }
+    }
+    walk(root)
+    return out
+  }
+
+  /**
+   * Enter in a contenteditable can leave bare text next to `<div>` blocks. Giving the loose run
+   * its own paragraph keeps block-level splitting below predictable (and the Markdown unchanged).
+   */
+  function normalizeBlocks(root: HTMLElement): void {
+    if (!(Array.from(root.children) as HTMLElement[]).some((child) => isBlockEl(child))) return
+    const loose = (node: Node): boolean => !isBlockEl(node) && (
+      node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim().length > 0
+    )
+    let group: Node[] = []
+    const flush = (): void => {
+      if (group.length === 0) return
+      const paragraph = document.createElement('p')
+      root.insertBefore(paragraph, group[0])
+      for (const node of group) paragraph.appendChild(node)
+      group = []
+    }
+    for (const child of Array.from(root.childNodes)) {
+      if (loose(child)) group.push(child)
+      else flush()
+    }
+    flush()
+  }
+
+  /** Wraps one (single-block) range, folding it into an existing mark of the same kind. */
+  function wrapRange(root: HTMLElement, range: Range, tagName: string, group: readonly string[], attributes?: Record<string, string>): HTMLElement | null {
+    const wrapper = document.createElement(tagName)
+    for (const [name, value] of Object.entries(attributes ?? {})) wrapper.setAttribute(name, value)
+    wrapper.appendChild(range.extractContents())
+    if (!(wrapper.textContent ?? '').length && !wrapper.querySelector('img')) return null
+    range.insertNode(wrapper)
+    // A selection that ended mid-mark leaves a copy of that mark inside the wrapper; folding it
+    // back into the outer one keeps `<u><u>…</u></u>` out of the Markdown.
+    let styled: HTMLElement = wrapper
+    const outer = outermostMark(wrapper.parentNode, root)
+    if (outer && group.includes(outer.tagName.toLowerCase())) {
+      const parent = wrapper.parentNode
+      if (parent) {
+        while (wrapper.firstChild) parent.insertBefore(wrapper.firstChild, wrapper)
+        parent.removeChild(wrapper)
+        styled = outer
+      }
+    }
+    normalizeMark(root, styled, group)
+    return root.contains(styled) ? styled : null
+  }
+
+  /**
+   * Wraps the non-collapsed selection and puts the caret after it. Multi-line selections are
+   * wrapped per paragraph — one `<strong>` around several `<p>`s would not survive the trip
+   * through Markdown.
+   */
+  function wrapSelection(root: HTMLElement, tagName: string, group: readonly string[], attributes?: Record<string, string>): void {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
+    const range = selection.getRangeAt(0)
+    if (!root.contains(range.commonAncestorContainer)) return
+    normalizeBlocks(root)
+    const live = window.getSelection()
+    const active = live && live.rangeCount > 0 ? live.getRangeAt(0) : range
+    const blocks = leafBlocks(root).filter((block) => active.intersectsNode(block))
+    const targets: Range[] = []
+    if (blocks.length <= 1) {
+      targets.push(active.cloneRange())
+    } else {
+      for (const block of blocks) {
+        const part = document.createRange()
+        part.selectNodeContents(block)
+        if (block.contains(active.startContainer)) part.setStart(active.startContainer, active.startOffset)
+        if (block.contains(active.endContainer)) part.setEnd(active.endContainer, active.endOffset)
+        if (!part.collapsed) targets.push(part)
+      }
+    }
+    let last: HTMLElement | null = null
+    for (const target of targets) last = wrapRange(root, target, tagName, group, attributes) ?? last
+    if (last) placeCaretAfterPlain(last)
+  }
+
+  /**
+   * Re-applying a mark to part of an existing run can leave `<u><u>x</u></u>` or a stray empty
+   * `<u>` where the run was split; fold those back into one element.
+   */
+  function normalizeMark(root: HTMLElement, wrapper: HTMLElement, group: readonly string[]): void {
+    wrapper.querySelectorAll(group.join(',')).forEach((inner) => {
+      while (inner.firstChild) inner.parentNode?.insertBefore(inner.firstChild, inner)
+      inner.remove()
+    })
+    const parent = wrapper.parentNode
+    if (!parent) return
+    for (const sibling of Array.from(parent.querySelectorAll(group.join(',')))) {
+      if (sibling !== wrapper && (sibling.textContent ?? '').length === 0) sibling.remove()
+    }
+    if (!root.contains(wrapper) || (wrapper.textContent ?? '').length === 0) wrapper.remove()
+  }
+
+  /** Drops a ready-to-rename placeholder in an empty selection (link text, sample code). */
+  function insertPlaceholderMark(root: HTMLElement, tagName: string, text: string, attributes?: Record<string, string>): void {
     const selection = window.getSelection()
     if (!selection || selection.rangeCount === 0) return
-    let node: Node | null = selection.anchorNode
-    let styled: Node | null = null
-    while (node && node !== previewRef.current) {
-      if (node.nodeType === Node.ELEMENT_NODE && tagNames.includes((node as Element).tagName.toLowerCase())) {
-        styled = node
-        break
-      }
-      node = node.parentNode
-    }
-    if (styled) placeCaretAfter(styled)
-    // Toggling the command off at a collapsed caret clears the "pending" bold/italic state
-    // without touching the content that was just styled.
-    for (const cmd of ['bold', 'italic', 'strikeThrough', 'underline']) {
-      if (document.queryCommandState(cmd)) document.execCommand(cmd)
-    }
+    const range = selection.getRangeAt(0)
+    if (!root.contains(range.commonAncestorContainer)) return
+    const element = document.createElement(tagName)
+    for (const [name, value] of Object.entries(attributes ?? {})) element.setAttribute(name, value)
+    element.textContent = text
+    range.deleteContents()
+    range.insertNode(element)
+    const inside = document.createRange()
+    inside.selectNodeContents(element)
+    selectRange(inside)
   }
 
   /**
-   * Applies Markdown formatting. Source mode manipulates the text directly; preview mode uses
-   * the browser's native rich-text commands. In both cases the caret ends up AFTER the inserted
-   * mark (nothing selected), so typing continues normally.
+   * Applies Markdown formatting. Source mode manipulates the text directly; preview mode wraps
+   * the selection in real elements instead of leaning on `execCommand`, whose "typing style"
+   * is exactly what leaked the format into text typed afterwards. Either way nothing is left
+   * selected and the caret sits outside the mark.
    */
   function applyFormat(kind: MarkKind): void {
     if (mode === 'preview') {
       const el = previewRef.current
       if (!el) return
       el.focus()
-      // Only single-line inline marks need the caret fix; block commands manage their own caret.
-      let inlineTags: string[] | null = null
-      switch (kind) {
-        case 'bold': document.execCommand('bold'); inlineTags = ['b', 'strong']; break
-        case 'italic': document.execCommand('italic'); inlineTags = ['i', 'em']; break
-        case 'strike': document.execCommand('strikeThrough'); inlineTags = ['strike', 's', 'del']; break
-        case 'underline': document.execCommand('underline'); inlineTags = ['u']; break
-        case 'heading': document.execCommand('formatBlock', false, 'h2'); break
-        case 'quote': document.execCommand('formatBlock', false, 'blockquote'); break
-        case 'list': document.execCommand('insertUnorderedList'); break
-        case 'code': {
-          const selection = window.getSelection()
-          const text = selection?.toString() ?? ''
-          document.execCommand('insertHTML', false, `<code>${text || '代码'}</code>`)
-          inlineTags = ['code']
-          break
-        }
-        case 'codeblock': document.execCommand('formatBlock', false, 'pre'); break
-        case 'link': {
-          const selection = window.getSelection()
-          const label = selection?.toString() || '链接文字'
-          document.execCommand('insertHTML', false, `<a href="https://">${label}</a>`)
-          inlineTags = ['a']
-          break
-        }
+      const inlineGroups: Partial<Record<MarkKind, { tag: string; group: readonly string[] }>> = {
+        bold: { tag: 'strong', group: MARK_GROUPS.bold },
+        italic: { tag: 'em', group: MARK_GROUPS.italic },
+        strike: { tag: 's', group: MARK_GROUPS.strike },
+        underline: { tag: 'u', group: MARK_GROUPS.underline },
+        code: { tag: 'code', group: MARK_GROUPS.code }
       }
-      if (inlineTags) settleAfterInline(inlineTags)
+      const inlineTag = inlineGroups[kind]
+      const selection = window.getSelection()
+      const collapsed = !selection || selection.isCollapsed
+
+      if (inlineTag) {
+        const covering = selection && !collapsed
+          ? sameTagAncestor(selection.getRangeAt(0).startContainer, el, inlineTag.group)
+          : null
+        // Re-applying to the same run means "off"; the selection may also have picked up the
+        // padding text node our own caret placement leaves behind, hence the text comparison.
+        const coversIt = covering && (
+          covering.contains(selection!.getRangeAt(0).endContainer) ||
+          selection!.toString() === (covering.textContent ?? '')
+        )
+        if (covering && coversIt) {
+          unwrapMark(covering)
+        } else if (collapsed) {
+          // Nothing selected: a sample word is friendlier than a dead button, and it ships
+          // pre-selected so the next keystroke replaces it.
+          if (inlineTag.tag === 'code') insertPlaceholderMark(el, 'code', '代码')
+          else insertPlaceholderMark(el, inlineTag.tag, '文字')
+        } else {
+          wrapSelection(el, inlineTag.tag, inlineTag.group)
+        }
+      } else if (kind === 'link') {
+        const existing = collapsed ? null : sameTagAncestor(selection!.getRangeAt(0).startContainer, el, MARK_GROUPS.link)
+        if (existing) unwrapMark(existing)
+        else if (collapsed) insertPlaceholderMark(el, 'a', '链接文字', { href: 'https://' })
+        else wrapSelection(el, 'a', MARK_GROUPS.link, { href: 'https://' })
+      } else if (kind === 'heading') {
+        document.execCommand('formatBlock', false, 'h2')
+      } else if (kind === 'quote') {
+        document.execCommand('formatBlock', false, 'blockquote')
+      } else if (kind === 'list') {
+        document.execCommand('insertUnorderedList')
+      } else if (kind === 'codeblock') {
+        document.execCommand('formatBlock', false, 'pre')
+      }
       setContent(htmlToMarkdown(el.innerHTML))
       return
     }
@@ -429,6 +813,10 @@ export function Composer({
             aria-multiline="true"
             className={`composer-preview markdown${isEditor ? ' editor-textarea' : ''}`}
             onInput={onPreviewInput}
+            // Typing at the end of a formatted run would otherwise stay inside it; the native
+            // beforeinput listener above inserts those characters, IME text is lifted on end.
+            onCompositionStart={beginComposition}
+            onCompositionEnd={finishComposition}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault()
