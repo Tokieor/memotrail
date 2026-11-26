@@ -4,7 +4,14 @@ import type { AppConfig, ListMemosOptions, Memo, MemoList, QuickCapturePayload, 
 const api = {
   config: {
     get: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
-    set: (patch: Partial<AppConfig>): Promise<AppConfig> => ipcRenderer.invoke('config:set', patch)
+    set: (patch: Partial<AppConfig>): Promise<AppConfig> => ipcRenderer.invoke('config:set', patch),
+    onChange: (callback: (config: AppConfig) => void) => {
+      const listener = (_event: unknown, config: AppConfig): void => callback(config)
+      ipcRenderer.on('config:changed', listener)
+      return () => {
+        ipcRenderer.removeListener('config:changed', listener)
+      }
+    }
   },
   auth: {
     signIn: (serverUrl: string, username: string, password: string) =>

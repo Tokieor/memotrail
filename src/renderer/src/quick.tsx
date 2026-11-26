@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import { BoltIcon, ImageIcon, LinkIcon, TagIcon } from './components/Icons'
+import { formatAccelerator } from './lib/accelerator'
 
 type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC'
 type State = 'idle' | 'sending' | 'done' | 'error'
@@ -15,6 +16,7 @@ function QuickCapture(): JSX.Element {
   const [state, setState] = useState<State>('idle')
   const [message, setMessage] = useState('')
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [hotkey, setHotkey] = useState('CommandOrControl+Shift+M')
   const input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -22,6 +24,7 @@ function QuickCapture(): JSX.Element {
     void (async () => {
       const config = await window.api.config.get()
       setConfigured(Boolean(config?.serverUrl))
+      if (config?.quickHotkey) setHotkey(config.quickHotkey)
       const status = await window.api.auth.status()
       if (status.success && status.data) {
         const preferred = status.data?.defaultVisibility as Visibility | undefined
@@ -29,6 +32,8 @@ function QuickCapture(): JSX.Element {
       }
     })()
   }, [])
+
+  useEffect(() => window.api.config.onChange((next) => setHotkey(next.quickHotkey)), [])
 
   useEffect(() => {
     if (content) localStorage.setItem(DRAFT_KEY, content)
@@ -72,7 +77,7 @@ function QuickCapture(): JSX.Element {
       <div className="quick-header">
         <span style={{ color: 'var(--accent)', lineHeight: 0 }}><BoltIcon size={18} /></span>
         <span className="title">快速记录</span>
-        <span className="kbd">Ctrl/⌘+Shift+Space</span>
+        <span className="kbd">{formatAccelerator(hotkey)}</span>
         <button
           type="button"
           onClick={() => { void window.api.quick.showMain(); void window.api.quick.hide() }}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AppConfig } from '@shared/types'
 import { describeError } from '../lib/errors'
+import { formatAccelerator } from '../lib/accelerator'
 import { CheckIcon, ChevronIcon, EyeIcon, SyncIcon } from './Icons'
 
 interface Props {
@@ -167,7 +168,7 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
               <label className="field-label">快速记录（点一下输入框后直接按组合键）</label>
               <input
                 className="field-input"
-                value={hotkey}
+                value={formatAccelerator(hotkey)}
                 readOnly
                 onKeyDown={(e) => {
                   e.preventDefault()

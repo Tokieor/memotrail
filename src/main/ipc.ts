@@ -2,7 +2,7 @@ import { app, ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import * as memos from './memos/client'
 import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
-import { getMainWindow, hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
+import { broadcast, getMainWindow, hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
 import { registerQuickHotkey } from './hotkeys'
 
 /** Only the app's own pages may talk to these handlers. */
@@ -38,6 +38,7 @@ export function registerIpc(): void {
     if (patch.launchAtLogin !== undefined && process.platform !== 'linux') {
       app.setLoginItemSettings({ openAtLogin: next.launchAtLogin })
     }
+    broadcast('config:changed', next)
     return next
   })
 

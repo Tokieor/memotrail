@@ -5,6 +5,13 @@ const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
 
 let mainWindow: BrowserWindow | null = null
 
+/** Sends a message to every open window (main + quick capture). */
+export function broadcast(channel: string, payload?: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload)
+  }
+}
+
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
