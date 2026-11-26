@@ -1,7 +1,35 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import TurndownService from 'turndown'
 
 marked.setOptions({ gfm: true, breaks: true })
+
+/** Reverse converter for the WYSIWYG editor: HTML in the contenteditable → Markdown source. */
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+  br: '\n'
+})
+
+// Memos/marked keeps <u> as inline HTML; turndown has no default rule, so preserve it.
+turndown.addRule('underline', {
+  filter: ['u', 'ins'],
+  replacement: (content) => `<u>${content}</u>`
+})
+
+// marked renders a single newline as <br> (breaks:true); keep the round trip stable.
+turndown.addRule('lineBreak', {
+  filter: 'br',
+  replacement: () => '\n'
+})
+
+export function htmlToMarkdown(html: string): string {
+  // The private attachment scheme is only for rendering; store the original /file/ path.
+  return turndown.turndown(html).replace(/\]\(memotrail:\/\/local\/file\//g, '](/file/')
+}
 
 /**
  * Memos stores Markdown; render it, then strip anything dangerous before it reaches the DOM.

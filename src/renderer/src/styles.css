@@ -417,7 +417,7 @@ button {
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { width: 100%; resize: none; border: 0; outline: 0; background: transparent; font: 14px/24px var(--font-sans); color: var(--ink); }
 .composer textarea::placeholder { color: var(--faint); }
-.composer-divider { height: 1px; background: var(--border); margin: 12px 0; }
+.composer-divider { height: 1px; background: var(--border); margin: 8px 0; }
 .composer-footer { display: flex; align-items: center; gap: 8px; }
 .composer-footer .spacer { flex: 1; }
 .tool-btn {
@@ -938,11 +938,10 @@ button {
 .boot-error p { margin: 0; font-size: 13px; max-width: 420px; }
 .boot-error-hint { color: var(--faint); font-size: 11.5px !important; }
 
-/* Markdown formatting toolbar */
+/* Markdown formatting toolbar — no background, tight spacing */
 .md-toolbar {
-  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
-  margin-top: 8px; padding: 3px 4px; border-radius: 7px;
-  background: var(--paper);
+  display: flex; align-items: center; gap: 1px; flex-wrap: wrap;
+  margin-top: 4px; padding: 0;
 }
 .md-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -957,3 +956,24 @@ button {
 .md-strike { text-decoration: line-through; }
 .md-underline { text-decoration: underline; }
 .md-sep { width: 1px; height: 14px; margin: 0 4px; background: var(--border); }
+
+/* WYSIWYG preview surface — shares .markdown rendering rules */
+.composer-preview {
+  min-height: 72px; max-height: 420px; overflow-y: auto;
+  outline: 0; word-break: break-word;
+  font: 14px/24px var(--font-sans); color: var(--ink);
+}
+.editor-composer .composer-preview {
+  min-height: 260px; line-height: 27px; color: var(--body);
+}
+.composer-preview:empty::before,
+.composer-preview:has(> [data-placeholder])::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  pointer-events: none;
+}
+.composer-preview [data-placeholder] { display: none; }
+.composer-preview img { max-width: 100%; border-radius: 8px; }
+
+/* Active edit-mode toggle */
+.tool-btn.plain.active { background: var(--accent-soft); color: var(--accent-hover); }
