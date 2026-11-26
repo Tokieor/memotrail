@@ -99,8 +99,16 @@ export function ChevronIcon(props: IconProps): JSX.Element {
 export function SendIcon(props: IconProps): JSX.Element {
   return (
     <svg {...base(props)}>
-      <path d="M4.5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Same plane as before, drawn nose-up-right; the group spins it 45° so it flies right.
+          Rotating about the box centre leaves the silhouette 3.3 units right of centre (all the
+          mass is on the nose side), so it is nudged back to sit optically centred. */}
+      <g transform="translate(-3.28 0) rotate(45 12 12)">
+        <path
+          d="M20.6 3.4 3.9 10.1c-.8.3-.8 1.4 0 1.7l6.2 2.2 2.2 6.2c.3.8 1.4.8 1.7 0z"
+          stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round"
+        />
+        <path d="M20.6 3.4 10.1 14" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </g>
     </svg>
   )
 }
