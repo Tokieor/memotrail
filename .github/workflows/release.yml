@@ -1,0 +1,99 @@
+name: Release
+
+# 只在推送版本 tag（v1.2.3）时触发；普通提交不会跑。
+# 需要手动试跑时用 Actions 页面上的 "Run workflow"（只构建，不发布）。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS x64
+            os: macos-15-intel
+            args: --mac --x64
+            artifact: memotrail-macos-x64
+            files: dist/*.dmg
+          - label: macOS arm64
+            os: macos-15
+            args: --mac --arm64
+            artifact: memotrail-macos-arm64
+            files: dist/*.dmg
+          - label: Windows x64
+            os: windows-latest
+            args: --win --x64
+            artifact: memotrail-windows-x64
+            files: dist/*.exe
+          - label: Linux x64
+            os: ubuntu-latest
+            args: --linux --x64
+            artifact: memotrail-linux-x64
+            files: dist/*.AppImage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build bundles
+        run: npm run build
+
+      - name: Package installer
+        run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          # 没有签名证书时不要自动查找 identity，避免构建中断
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload assets to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.exe
+            dist/*.AppImage
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
