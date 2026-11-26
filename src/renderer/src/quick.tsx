@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 import {
-  BoltIcon, CodeBlockIcon, CodeIcon, HeadingIcon, ImageIcon, LinkIcon, ListIcon, QuoteIcon, SendIcon
+  BoltIcon, CodeBlockIcon, CodeIcon, EyeIcon, HeadingIcon, ImageIcon, LinkIcon, ListIcon, QuoteIcon, SendIcon
 } from './components/Icons'
 import { VisibilityPicker } from './components/VisibilityPicker'
 import { formatAccelerator } from './lib/accelerator'
 import { applyCachedTheme, applyTheme, watchSystemAppearance } from './lib/theme'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from './lib/tag-suggest'
+import { renderMarkdown } from './lib/markdown'
 import { visibleLength } from './lib/text'
 
 type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC'
@@ -22,6 +23,7 @@ function QuickCapture(): JSX.Element {
   const [state, setState] = useState<State>('idle')
   const [message, setMessage] = useState('')
   const [configured, setConfigured] = useState<boolean | null>(null)
+  const [mode, setMode] = useState<'source' | 'preview'>('source')
   const [hotkey, setHotkey] = useState('CommandOrControl+Shift+M')
   const [tags, setTags] = useState<string[]>([])
   const [suggest, setSuggest] = useState<{ start: number; query: string; index: number; point: CaretPoint } | null>(null)
@@ -239,6 +241,11 @@ function QuickCapture(): JSX.Element {
 
       <div className="quick-body-area">
         <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {mode === 'preview' ? (
+            content.trim()
+              ? <div className="composer-preview markdown quick-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }} />
+              : <p className="quick-preview-empty">还没有内容…</p>
+          ) : (
           <textarea
             ref={input}
             value={content}
@@ -276,7 +283,8 @@ function QuickCapture(): JSX.Element {
             rows={3}
             placeholder="刚想到什么？随手记下来…支持 Markdown 和 #标签"
           />
-          {suggest && options.length > 0 && (() => {
+          )}
+          {mode === 'source' && suggest && options.length > 0 && (() => {
             const { point } = suggest
             const boxWidth = 200
             const maxLeft = Math.max(4, (input.current?.clientWidth ?? boxWidth) - boxWidth)
@@ -304,7 +312,6 @@ function QuickCapture(): JSX.Element {
             )
           })()}
         </div>
-      </div>
 
         <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
           <button type="button" className="md-btn md-bold" title="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
@@ -320,6 +327,7 @@ function QuickCapture(): JSX.Element {
           <button type="button" className="md-btn" title="代码块" data-tip="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
           <button type="button" className="md-btn" title="链接 [文字](url)" data-tip="链接" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
         </div>
+      </div>
 
       <div className="quick-footer">
         <VisibilityPicker value={visibility} onChange={setVisibility} size={15} />
@@ -334,6 +342,16 @@ function QuickCapture(): JSX.Element {
           title="插入标签 #" data-tip="插入标签"
         ><span style={{ fontSize: 15, lineHeight: 1 }}>#</span></button>
         <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片" data-tip="插入图片"><ImageIcon size={17} /></button>
+        <button
+          className={`tool-btn plain${mode === 'preview' ? ' active' : ''}`}
+          onClick={() => setMode('preview')}
+          title="预览（所见即所得）" data-tip="预览"
+        ><EyeIcon size={17} /></button>
+        <button
+          className={`tool-btn plain${mode === 'source' ? ' active' : ''}`}
+          onClick={() => { setMode('source'); requestAnimationFrame(() => input.current?.focus()) }}
+          title="源代码（Markdown）" data-tip="源代码"
+        ><CodeIcon size={17} /></button>
         <span className="spacer" />
         <span className={`quick-hint${state === 'error' ? ' inline-error' : ''}`}>
           {configured === false
