@@ -66,10 +66,21 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
 
   async function save(): Promise<void> {
     try {
-      const next = await window.api.config.set({ quickHotkey: hotkey, launchAtLogin })
+      const next = await window.api.config.set({ quickHotkey: hotkey })
       onConfigChange(next)
       setMessage('已保存')
     } catch (err) {
+      setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
+    }
+  }
+
+  async function toggleLaunchAtLogin(next: boolean): Promise<void> {
+    setLaunchAtLogin(next)
+    try {
+      const updated = await window.api.config.set({ launchAtLogin: next })
+      onConfigChange(updated)
+    } catch (err) {
+      setLaunchAtLogin(!next)
       setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     }
   }
@@ -206,13 +217,6 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                 placeholder="按下组合键…"
               />
             </div>
-            <label className="pref-row" style={{ cursor: 'pointer' }}>
-              <div className="pref-meta">
-                <span className="pref-title">登录时启动</span>
-                <span className="pref-sub">开机后自动在后台运行</span>
-              </div>
-              <input type="checkbox" checked={launchAtLogin} onChange={(e) => setLaunchAtLogin(e.target.checked)} />
-            </label>
             {message && <p style={{ fontSize: 12, color: message === '已保存' ? 'var(--accent)' : 'var(--danger)', marginTop: 8 }}>{message}</p>}
             <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
               <button className="primary-btn" onClick={() => void save()}>保存</button>
@@ -229,9 +233,11 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                 <span className="pref-title">登录时启动</span>
                 <span className="pref-sub">开机后自动在后台运行</span>
               </div>
-              <input type="checkbox" checked={launchAtLogin} onChange={(e) => setLaunchAtLogin(e.target.checked)} />
+              <input type="checkbox" checked={launchAtLogin} onChange={(e) => void toggleLaunchAtLogin(e.target.checked)} />
             </div>
-            <p style={{ fontSize: 11, color: 'var(--faint)', marginTop: 12 }}>更改后记得在「快捷键」页保存。</p>
+            {message && section === 'general' && (
+              <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{message}</p>
+            )}
           </div>
         )}
 
