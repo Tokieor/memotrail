@@ -227,11 +227,11 @@ button {
   transition: background 0.15s, color 0.15s;
 }
 .nav-item:hover { background: var(--tint-hover); }
-.nav-item.active { background: var(--ink); color: var(--paper); font-weight: 500; }
-.nav-item.active:hover { background: var(--ink); }
+.nav-item.active { background: var(--accent); color: var(--on-accent); font-weight: 500; }
+.nav-item.active:hover { background: var(--accent-hover); }
 .nav-item .label { flex: 1; }
 .nav-item .count { font-size: 11px; color: var(--faint); }
-.nav-item.active .count { color: var(--paper); opacity: 0.62; }
+.nav-item.active .count { color: var(--on-accent); opacity: 0.7; }
 .nav-item svg { flex: 0 0 18px; }
 
 .tag-item {
@@ -241,9 +241,10 @@ button {
   text-align: left; cursor: pointer; transition: background 0.15s;
 }
 .tag-item:hover { background: var(--tint-hover); }
-.tag-item.active { background: var(--ink); color: var(--paper); }
-.tag-item.active:hover { background: var(--ink); }
-.tag-item.active .count { color: var(--paper); opacity: 0.62; }
+.tag-item.active { background: var(--accent); color: var(--on-accent); }
+.tag-item.active:hover { background: var(--accent-hover); }
+.tag-item.active .count { color: var(--on-accent); opacity: 0.7; }
+.tag-item.active .tag-dot { box-shadow: 0 0 0 1.5px var(--on-accent); }
 .tag-item .label { flex: 1; }
 .tag-item .count { font-size: 11px; color: var(--faint); }
 .tag-dot { width: 8px; height: 8px; border-radius: 4px; flex: 0 0 8px; }
