@@ -59,6 +59,33 @@ const MARK_GROUPS = {
   link: ['a']
 } as const
 
+/** Characters that may sit next to a single `*` before it counts as emphasis. */
+const EDGE = /[\s，。、！？；：（）()《》【】「」『』“”‘’"'.,:;!?\-—]/
+
+function edgeOk(ch: string | undefined): boolean {
+  return ch === undefined || EDGE.test(ch)
+}
+
+function tokenElement(tag: string, text: string, attributes?: Record<string, string>): HTMLElement {
+  const element = document.createElement(tag)
+  for (const [name, value] of Object.entries(attributes ?? {})) element.setAttribute(name, value)
+  element.textContent = text
+  return element
+}
+
+/** Markdown pairs the editor renders as soon as the caret leaves them. */
+const TOKEN_RULES: Array<{ pattern: RegExp; strict?: boolean; build: (match: RegExpExecArray) => HTMLElement }> = [
+  { pattern: /\*\*(?!\s)([^*\n]+?)\*\*/g, build: (m) => tokenElement('strong', m[1]) },
+  { pattern: /~~(?!\s)([^~\n]+?)~~/g, build: (m) => tokenElement('s', m[1]) },
+  { pattern: /`([^`\n]+)`/g, build: (m) => tokenElement('code', m[1]) },
+  { pattern: /<u>([^<\n]+)<\/u>/g, build: (m) => tokenElement('u', m[1]) },
+  {
+    pattern: /\[([^\]\n]*)\]\((https?:\/\/[^)\s]*)\)/g,
+    build: (m) => tokenElement('a', m[1], { href: m[2] })
+  },
+  { pattern: /\*([^*\n]+?)\*/g, strict: true, build: (m) => tokenElement('em', m[1]) }
+]
+
 /** Inline marks that must never bleed into whatever gets typed next. */
 const INLINE_MARKS = ['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'del', 'code', 'a']
 
@@ -132,6 +159,8 @@ export function Composer({
   const fileInput = useRef<HTMLInputElement>(null)
   /** Inline mark an IME composition is about to type into, plus its text before composing. */
   const composeGuard = useRef<{ mark: HTMLElement; before: string } | null>(null)
+  /** True while an IME composition is in flight; DOM clean-up must not run during one. */
+  const composing = useRef(false)
   const contentRef = useRef(content)
   contentRef.current = content
 
@@ -201,6 +230,40 @@ export function Composer({
   }, [focusSignal, mode])
 
   /**
+   * Marker pairs are plain text until the caret leaves them; moving away (arrow keys, a click,
+   * or blurring the surface) is the moment to render them.
+   */
+  useEffect(() => {
+    if (mode !== 'preview') return
+    const el = previewRef.current
+    if (!el) return
+    let frame = 0
+    const run = (): void => {
+      frame = 0
+      const root = previewRef.current
+      if (!root) return
+      // Only when the work would be visible to the user: the caret is (or just was) in here.
+      const selection = window.getSelection()
+      const inside = !!selection && selection.rangeCount > 0 && root.contains(selection.getRangeAt(0).startContainer)
+      if (!inside && document.activeElement !== root) return
+      if (renderTypedTokens(root)) setContent(htmlToMarkdown(root.innerHTML))
+    }
+    const schedule = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(run)
+    }
+    document.addEventListener('selectionchange', schedule)
+    el.addEventListener('blur', schedule)
+    el.addEventListener('input', schedule)
+    return () => {
+      document.removeEventListener('selectionchange', schedule)
+      el.removeEventListener('blur', schedule)
+      el.removeEventListener('input', schedule)
+      if (frame) cancelAnimationFrame(frame)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  /**
    * Native `beforeinput` (React only synthesises one from `textInput`, which cannot cancel the
    * edit). Taking over here is what keeps a character typed right after a formatted run plain.
    */
@@ -246,6 +309,10 @@ export function Composer({
   function onPreviewInput(): void {
     const el = previewRef.current
     if (!el) return
+    if (!composing.current) {
+      pruneEmptyMarks(el)
+      clearStrayStyles(el)
+    }
     setContent(htmlToMarkdown(el.innerHTML))
   }
 
@@ -281,6 +348,7 @@ export function Composer({
 
   /** IME text cannot be cancelled, so remember the mark it would land in. */
   function beginComposition(): void {
+    composing.current = true
     const root = previewRef.current
     if (!root) return
     const mark = markSwallowingNextChar(root)
@@ -289,6 +357,7 @@ export function Composer({
 
   /** After composing, peel the composed characters back out of the mark as plain text. */
   function finishComposition(): void {
+    composing.current = false
     const guard = composeGuard.current
     composeGuard.current = null
     const root = previewRef.current
@@ -610,22 +679,6 @@ export function Composer({
     if (!root.contains(wrapper) || (wrapper.textContent ?? '').length === 0) wrapper.remove()
   }
 
-  /** Drops a ready-to-rename placeholder in an empty selection (link text, sample code). */
-  function insertPlaceholderMark(root: HTMLElement, tagName: string, text: string, attributes?: Record<string, string>): void {
-    const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return
-    const range = selection.getRangeAt(0)
-    if (!root.contains(range.commonAncestorContainer)) return
-    const element = document.createElement(tagName)
-    for (const [name, value] of Object.entries(attributes ?? {})) element.setAttribute(name, value)
-    element.textContent = text
-    range.deleteContents()
-    range.insertNode(element)
-    const inside = document.createRange()
-    inside.selectNodeContents(element)
-    selectRange(inside)
-  }
-
   /**
    * Applies Markdown formatting. Source mode manipulates the text directly; preview mode wraps
    * the selection in real elements instead of leaning on `execCommand`, whose "typing style"
@@ -661,17 +714,16 @@ export function Composer({
         if (covering && coversIt) {
           unwrapMark(covering)
         } else if (collapsed) {
-          // Nothing selected: a sample word is friendlier than a dead button, and it ships
-          // pre-selected so the next keystroke replaces it.
-          if (inlineTag.tag === 'code') insertPlaceholderMark(el, 'code', '代码')
-          else insertPlaceholderMark(el, inlineTag.tag, '文字')
+          // Nothing selected: drop the Markdown pair so the caret sits between the markers and
+          // whatever is typed there renders once the caret leaves.
+          insertTokenPair(el, kind)
         } else {
           wrapSelection(el, inlineTag.tag, inlineTag.group)
         }
       } else if (kind === 'link') {
         const existing = collapsed ? null : sameTagAncestor(selection!.getRangeAt(0).startContainer, el, MARK_GROUPS.link)
         if (existing) unwrapMark(existing)
-        else if (collapsed) insertPlaceholderMark(el, 'a', '链接文字', { href: 'https://' })
+        else if (collapsed) insertTokenPair(el, 'link')
         else wrapSelection(el, 'a', MARK_GROUPS.link, { href: 'https://' })
       } else if (kind === 'heading') {
         document.execCommand('formatBlock', false, 'h2')
@@ -743,6 +795,211 @@ export function Composer({
     })
   }
 
+  /**
+   * Deletes marks whose text is gone. Left in place they keep the caret inside and every new
+   * character inherits the format, which is why an "empty" composer could still type bold.
+   */
+  function pruneEmptyMarks(root: HTMLElement): boolean {
+    let changed = false
+    const selection = window.getSelection()
+    for (const mark of Array.from(root.querySelectorAll(INLINE_MARKS.join(','))) as HTMLElement[]) {
+      if ((mark.textContent ?? '').length > 0 || mark.querySelector('img')) continue
+      if (selection && selection.rangeCount > 0 && mark.contains(selection.getRangeAt(0).startContainer)) {
+        const range = document.createRange()
+        range.setStartAfter(mark)
+        range.collapse(true)
+        selectRange(range)
+      }
+      mark.remove()
+      changed = true
+    }
+    return changed
+  }
+
+  /**
+   * Deleting a formatted run leaves Chrome's "typing style" switched on even after the run is
+   * gone, so an empty composer kept producing bold text. Neither clearing the DOM nor toggling
+   * the command resets it — dropping and re-adding the same caret does.
+   */
+  function clearStrayStyles(root: HTMLElement): boolean {
+    const selection = window.getSelection()
+    if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return false
+    const caret = selection.getRangeAt(0)
+    if (!root.contains(caret.startContainer)) return false
+    // Inside a real mark the style belongs to the text — leave it alone.
+    if (outermostMark(caret.startContainer, root)) return false
+    const carried = ['bold', 'italic', 'underline', 'strikeThrough']
+      .some((command) => document.queryCommandState(command))
+    if (!carried) return false
+    const same = caret.cloneRange()
+    selection.removeAllRanges()
+    selection.addRange(same)
+    return true
+  }
+
+  /**
+   * Turns markers the user is done with (`**x**`, `*x*`, `~~x~~`, `` `x` ``, `<u>x</u>`,
+   * `[x](url)`) into real elements. A pair still holding the caret is left alone so typing
+   * inside it keeps working.
+   */
+  function renderTypedTokens(root: HTMLElement): boolean {
+    if (composing.current) return false
+    const selection = window.getSelection()
+    const caret = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+    let changed = false
+    for (let round = 0; round < 40; round += 1) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      let converted = false
+      for (let node = walker.nextNode(); node && !converted; node = walker.nextNode()) {
+        const text = node as Text
+        if (!text.data) continue
+        if (text.parentElement?.closest('code, pre, a, strong, em, u, s, del')) continue
+        for (const rule of TOKEN_RULES) {
+          rule.pattern.lastIndex = 0
+          const match = rule.pattern.exec(text.data)
+          if (!match || !match[1]) continue
+          const begin = match.index
+          const finish = begin + match[0].length
+          if (rule.strict && !(edgeOk(text.data[begin - 1]) && edgeOk(text.data[finish]))) continue
+          const sameNode = !!caret && caret.startContainer === text
+          const offset = sameNode ? caret!.startOffset : -1
+          // Still editing between the markers — wait until the caret leaves.
+          if (sameNode && offset > begin && offset < finish) continue
+
+          const parent = text.parentNode
+          if (!parent) continue
+          const head = text.data.slice(0, begin)
+          const tail = text.data.slice(finish)
+          const headNode = head ? document.createTextNode(head) : null
+          const tailNode = tail ? document.createTextNode(tail) : null
+          const element = rule.build(match)
+          const fragment = document.createDocumentFragment()
+          if (headNode) fragment.appendChild(headNode)
+          fragment.appendChild(element)
+          if (tailNode) fragment.appendChild(tailNode)
+          parent.replaceChild(fragment, text)
+
+          if (sameNode && offset >= 0) {
+            const target = offset <= begin ? headNode : tailNode
+            if (target) {
+              const range = document.createRange()
+              range.setStart(target, offset <= begin ? offset : offset - finish)
+              range.collapse(true)
+              selectRange(range)
+            } else {
+              const range = document.createRange()
+              range.setStartAfter(element)
+              range.collapse(true)
+              selectRange(range)
+            }
+          }
+          changed = true
+          converted = true
+          break
+        }
+      }
+      if (!converted) break
+    }
+    return changed
+  }
+
+  /** Inserts an empty marker pair with the caret between it, Typora style. */
+  function insertTokenPair(root: HTMLElement, kind: MarkKind): void {
+    const pairs: Partial<Record<MarkKind, [string, string]>> = {
+      bold: ['**', '**'],
+      italic: ['*', '*'],
+      strike: ['~~', '~~'],
+      underline: ['<u>', '</u>'],
+      code: ['`', '`']
+    }
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+    const range = selection.getRangeAt(0)
+    if (!root.contains(range.commonAncestorContainer)) return
+    const pair = pairs[kind]
+    const token = kind === 'link' ? '[](https://)' : pair ? `${pair[0]}${pair[1]}` : ''
+    if (!token) return
+    const node = document.createTextNode(token)
+    range.deleteContents()
+    range.insertNode(node)
+    // Link text goes between the brackets, the rest between the two markers.
+    const caret = document.createRange()
+    caret.setStart(node, kind === 'link' ? 1 : pair![0].length)
+    caret.collapse(true)
+    selectRange(caret)
+    setContent(htmlToMarkdown(root.innerHTML))
+  }
+
+  /** Removes the empty lines a soft break left at the very end of a block. */
+  function trimEmptyTail(node: Node): void {
+    let last = node.lastChild
+    while (last) {
+      if (last.nodeName === 'BR' || (last.nodeType === Node.TEXT_NODE && !(last.textContent ?? ''))) {
+        last.remove()
+        last = node.lastChild
+        continue
+      }
+      if (last.nodeType === Node.ELEMENT_NODE) {
+        const element = last as HTMLElement
+        if (element.querySelector('img')) break
+        trimEmptyTail(element)
+        if (!element.firstChild) {
+          element.remove()
+          last = node.lastChild
+          continue
+        }
+      }
+      break
+    }
+  }
+
+  /**
+   * Enter inside a quote keeps both lines in the same `>` block; a second Enter on the empty
+   * line leaves the quote and continues as ordinary text.
+   */
+  function handleQuoteEnter(event: React.KeyboardEvent<HTMLDivElement>): boolean {
+    const root = previewRef.current
+    const selection = window.getSelection()
+    if (!root || !selection || !selection.isCollapsed || selection.rangeCount === 0) return false
+    const caret = selection.getRangeAt(0)
+    const anchor = caret.startContainer
+    const host = (anchor.nodeType === Node.ELEMENT_NODE ? (anchor as HTMLElement) : anchor.parentElement)
+      ?.closest('blockquote')
+    if (!host || !root.contains(host)) return false
+
+    const before = document.createRange()
+    before.selectNodeContents(host)
+    before.setEnd(caret.startContainer, caret.startOffset)
+    const holder = document.createElement('div')
+    holder.appendChild(before.cloneContents())
+    const lines = holder.innerHTML.split(/<br\s*\/?>/i)
+    const lineText = (lines[lines.length - 1] ?? '').replace(/<[^>]*>/g, '').trim()
+
+    event.preventDefault()
+    if (lineText) {
+      const br = document.createElement('br')
+      caret.deleteContents()
+      caret.insertNode(br)
+      const next = document.createRange()
+      next.setStartAfter(br)
+      next.collapse(true)
+      selectRange(next)
+    } else {
+      // Empty line: continue in a plain paragraph after the quote, and take the now-empty
+      // break back out of it so the quote keeps only the lines that have content.
+      const paragraph = document.createElement('p')
+      paragraph.appendChild(document.createElement('br'))
+      host.after(paragraph)
+      trimEmptyTail(host)
+      const next = document.createRange()
+      next.setStart(paragraph, 0)
+      next.collapse(true)
+      selectRange(next)
+    }
+    setContent(htmlToMarkdown(root.innerHTML))
+    return true
+  }
+
   /** Cuts exactly one image token out of the source, leaving every other image in place. */
   function removeImage(target: DraftImage): void {
     const source = contentRef.current
@@ -781,7 +1038,12 @@ export function Composer({
   }
 
   async function submit(): Promise<void> {
-    const text = content.trim()
+    // Anything still wrapped in raw markers is finished now — render it before saving.
+    const surface = previewRef.current
+    if (mode === 'preview' && surface && renderTypedTokens(surface)) {
+      setContent(htmlToMarkdown(surface.innerHTML))
+    }
+    const text = (mode === 'preview' && surface ? htmlToMarkdown(surface.innerHTML) : content).trim()
     if (!text || busy) return
     setBusy(true)
     setError('')
@@ -818,6 +1080,7 @@ export function Composer({
             onCompositionStart={beginComposition}
             onCompositionEnd={finishComposition}
             onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && handleQuoteEnter(e)) return
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault()
                 void submit()
