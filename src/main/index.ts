@@ -16,21 +16,26 @@ if (!app.requestSingleInstanceLock()) {
     showMainWindow()
   })
 
-  void app.whenReady().then(async () => {
+  void app.whenReady().then(() => {
     const config = loadConfig()
     memos.setRefreshTokenSink((token) => saveRefreshToken(token))
+
+    // Register IPC and create the window FIRST. A slow/unreachable server must never block
+    // startup: otherwise config:get never gets a handler and the renderer stays blank.
+    handleFileProtocol()
+    registerIpc()
+    createMainWindow()
+
+    // Session restore is a background task — the UI can render (and show Sign-In) meanwhile.
     if (config.serverUrl) {
       memos.setBaseUrl(config.serverUrl)
       // The refresh token is a rotating cookie the server hands back in a response header; we keep
       // it encrypted with the OS keychain so a restart can sign in again without the password.
       memos.setRefreshToken(loadRefreshToken())
-      const restored = await memos.refresh()
-      if (!restored.success) console.warn('[memotrail] no stored session:', restored.error)
+      void memos.refresh().then((restored) => {
+        if (!restored.success) console.warn('[memotrail] no stored session:', restored.error)
+      })
     }
-
-    handleFileProtocol()
-    registerIpc()
-    createMainWindow()
 
     createTray({
       open: () => showMainWindow(),

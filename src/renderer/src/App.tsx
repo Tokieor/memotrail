@@ -8,14 +8,29 @@ export function App(): JSX.Element {
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [checking, setChecking] = useState(true)
+  const [initError, setInitError] = useState('')
 
   useEffect(() => {
     void (async () => {
-      const loaded = await window.api.config.get()
-      setConfig(loaded)
-      const status = await window.api.auth.status()
-      if (status.success && status.data) setUser(status.data)
-      setChecking(false)
+      try {
+        // Guard against a preload/IPC that never answers: fail visibly instead of a blank window.
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('初始化超时：主进程没有响应，请重启应用')), 10000)
+        )
+        const loaded = await Promise.race([window.api.config.get(), timeout])
+        setConfig(loaded)
+        let status: Awaited<ReturnType<typeof window.api.auth.status>> | null = null
+        try {
+          status = await Promise.race([window.api.auth.status(), timeout])
+        } catch {
+          status = null // Auth probe failing is not fatal — show the sign-in screen.
+        }
+        if (status?.success && status.data) setUser(status.data)
+      } catch (error) {
+        setInitError(error instanceof Error ? error.message : String(error))
+      } finally {
+        setChecking(false)
+      }
     })()
   }, [])
 
@@ -34,6 +49,16 @@ export function App(): JSX.Element {
     await window.api.auth.signOut()
     setUser(null)
   }, [])
+
+  if (initError) {
+    return (
+      <div className="boot-error">
+        <h2>启动失败</h2>
+        <p>{initError}</p>
+        <p className="boot-error-hint">请完全退出应用后重新打开；若仍失败，检查 Memos 服务地址是否可用。</p>
+      </div>
+    )
+  }
 
   if (checking || !config) return <div className="h-full" />
 
