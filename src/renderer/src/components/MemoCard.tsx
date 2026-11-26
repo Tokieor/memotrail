@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
 import { MoreIcon, StarIcon } from './Icons'
@@ -6,18 +6,100 @@ import { MoreIcon, StarIcon } from './Icons'
 interface Props {
   memo: Memo
   serverUrl: string
+  /** Owned by the feed list so only one card's menu can be open at a time. */
+  menuOpen: boolean
+  onMenuOpenChange: (open: boolean) => void
   onChanged: (memo: Memo) => void
   onDeleted: (name: string) => void
   onEdit: (memo: Memo) => void
   onSelectTag?: (tag: string) => void
 }
 
+interface CardMenuProps {
+  anchor: React.RefObject<HTMLButtonElement>
+  onClose: () => void
+  onEdit: () => void
+  onCopy: () => void
+  onDelete: () => void
+}
+
+/**
+ * `position: fixed` measured against the trigger keeps the menu out of the feed's scroll clip,
+ * and the owning card carries a raised z-index (`.note-card.menu-open`) so it also paints above
+ * the following cards instead of sliding under them.
+ */
+function CardMenu({ anchor, onClose, onEdit, onCopy, onDelete }: CardMenuProps): JSX.Element {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current
+    const button = anchor.current
+    if (!menu || !button) return
+    const a = button.getBoundingClientRect()
+    const m = menu.getBoundingClientRect()
+    const gap = 6
+    const margin = 8
+    // Flip above the trigger when there is not enough room below (last rows of the feed).
+    let top = a.bottom + gap
+    if (top + m.height > window.innerHeight - margin) {
+      top = Math.max(margin, a.top - gap - m.height)
+    }
+    const left = Math.min(Math.max(margin, a.right - m.width), window.innerWidth - m.width - margin)
+    setPos({ top, left })
+  }, [anchor])
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent): void {
+      const target = event.target as Node
+      if (menuRef.current?.contains(target)) return
+      // The trigger toggles itself through onClick, otherwise close+click would fight each other.
+      if (anchor.current?.contains(target)) return
+      closeRef.current()
+    }
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') closeRef.current()
+    }
+    function dismiss(): void {
+      closeRef.current()
+    }
+    document.addEventListener('mousedown', onPointerDown, true)
+    document.addEventListener('keydown', onKeyDown)
+    window.addEventListener('resize', dismiss)
+    // Capture phase catches the feed's inner scroll container too.
+    window.addEventListener('scroll', dismiss, true)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown, true)
+      document.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('resize', dismiss)
+      window.removeEventListener('scroll', dismiss, true)
+    }
+  }, [anchor])
+
+  return (
+    <div
+      ref={menuRef}
+      className="card-menu card-menu-floating"
+      role="menu"
+      style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
+    >
+      <button className="action-btn" role="menuitem" onClick={() => { onClose(); onEdit() }}>编辑</button>
+      <button className="action-btn" role="menuitem" onClick={() => { onClose(); onCopy() }}>复制</button>
+      <button className="action-btn danger" role="menuitem" onClick={() => { onClose(); onDelete() }}>删除</button>
+    </div>
+  )
+}
+
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
-export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSelectTag }: Props): JSX.Element {
+export function MemoCard({
+  memo, serverUrl, menuOpen, onMenuOpenChange, onChanged, onDeleted, onEdit, onSelectTag
+}: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
   const html = useMemo(() => renderMarkdown(memo.content), [memo.content])
 
   async function run(action: () => Promise<{ success: boolean; data?: Memo; error?: string }>): Promise<void> {
@@ -55,19 +137,29 @@ export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSele
   }
 
   return (
-    <article className={`note-card${busy ? ' busy' : ''}`}>
+    <article className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}`}>
       <div className="card-tools">
-        <button className="meta-btn" title="更多" onClick={() => setMenuOpen((v) => !v)}>
+        <button
+          ref={menuButton}
+          className="meta-btn"
+          title="更多"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => onMenuOpenChange(!menuOpen)}
+        >
           <MoreIcon size={16} />
         </button>
-        {menuOpen && (
-          <div className="card-menu" onMouseLeave={() => setMenuOpen(false)}>
-            <button className="action-btn" onClick={() => { setMenuOpen(false); onEdit(memo) }}>编辑</button>
-            <button className="action-btn" onClick={() => { setMenuOpen(false); void navigator.clipboard.writeText(memo.content) }}>复制</button>
-            <button className="action-btn danger" onClick={() => { setMenuOpen(false); void remove() }}>删除</button>
-          </div>
-        )}
       </div>
+
+      {menuOpen && (
+        <CardMenu
+          anchor={menuButton}
+          onClose={() => onMenuOpenChange(false)}
+          onEdit={() => onEdit(memo)}
+          onCopy={() => { void navigator.clipboard.writeText(memo.content) }}
+          onDelete={() => { void remove() }}
+        />
+      )}
 
       <div className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
 

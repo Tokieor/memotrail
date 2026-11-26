@@ -408,6 +408,13 @@ button {
   box-shadow: var(--shadow-float);
 }
 .card-menu .action-btn { text-align: left; height: 28px; }
+/* Floating variant: fixed to the trigger's viewport rect so the feed's scroll container cannot
+   clip it; the open card's z-index (below) lifts it above the following cards. */
+.card-menu.card-menu-floating {
+  position: fixed; right: auto; top: auto; left: auto;
+  z-index: 60; min-width: 108px;
+}
+.note-card.menu-open { z-index: 30; }
 
 /* ---------- Composer (quick capture in feed) ---------- */
 .composer {
@@ -971,13 +978,14 @@ button {
 /* First/last blocks must not add margins, or the preview grows taller than the textarea. */
 .composer-preview > :first-child { margin-top: 0; }
 .composer-preview > :last-child { margin-bottom: 0; }
-.composer-preview:empty::before,
-.composer-preview:has(> [data-placeholder])::before {
-  content: attr(data-placeholder);
-  color: var(--faint);
-  pointer-events: none;
+/* Placeholder is an overlay sibling, never a node inside the editable region — otherwise typed
+   text lands after that node and the hint stays visible behind it. */
+.composer-placeholder {
+  position: absolute; top: 0; left: 0; right: 0;
+  font: 14px/24px var(--font-sans); color: var(--faint);
+  pointer-events: none; user-select: none; -webkit-user-select: none;
 }
-.composer-preview [data-placeholder] { display: none; }
+.editor-composer .composer-placeholder { line-height: 27px; }
 .composer-preview img { max-width: 100%; border-radius: 8px; }
 
 /* Active edit-mode toggle */

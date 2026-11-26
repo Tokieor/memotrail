@@ -31,6 +31,7 @@ type EditMode = 'preview' | 'source'
 type MarkKind = 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'heading' | 'list' | 'quote' | 'link' | 'codeblock'
 
 const DRAFT_KEY = 'memotrail.composer.draft'
+const PLACEHOLDER = '此刻有什么想记录的？换个标签，或直接开始写…'
 
 export function Composer({
   memoName,
@@ -60,19 +61,22 @@ export function Composer({
   contentRef.current = content
 
   const isEditor = variant === 'editor'
+  /** Preview mode shows the placeholder only while the source is genuinely empty. */
+  const isEmpty = content.trim().length === 0
   const options = useMemo(
     () => suggest ? filterTags(tagSuggestions, suggest.query) : [],
     [suggest, tagSuggestions]
   )
 
-  /** Writes markdown source into the WYSIWYG surface without going through React re-render. */
+  /**
+   * Writes markdown source into the WYSIWYG surface without going through React re-render.
+   * Empty source clears the node entirely — the placeholder is a separate overlay element, so
+   * nothing is left inside the editable region for typed text to sit behind.
+   */
   function paintPreview(source: string): void {
     const el = previewRef.current
     if (!el) return
-    el.innerHTML = source.trim()
-      ? renderMarkdown(source)
-      : '<span data-placeholder="1"></span>'
-    // Placeholder text via CSS ::before on the empty marker.
+    el.innerHTML = source.trim() ? renderMarkdown(source) : ''
   }
 
   // External content replacement (editing a different memo) updates both state and the preview DOM.
@@ -370,7 +374,6 @@ export function Composer({
             role="textbox"
             aria-multiline="true"
             className={`composer-preview markdown${isEditor ? ' editor-textarea' : ''}`}
-            data-placeholder="此刻有什么想记录的？换个标签，或直接开始写…"
             onInput={onPreviewInput}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -427,7 +430,7 @@ export function Composer({
               if (e.key === 'Escape' && onCancel) onCancel()
             }}
             rows={isEditor ? 12 : 3}
-            placeholder="此刻有什么想记录的？换个标签，或直接开始写…"
+            placeholder={PLACEHOLDER}
             className={isEditor ? 'editor-textarea' : ''}
             onPaste={(e) => {
               const files = Array.from(e.clipboardData.files)
@@ -443,6 +446,12 @@ export function Composer({
             }}
             onDragOver={(e) => e.preventDefault()}
           />
+        )}
+
+        {mode === 'preview' && isEmpty && (
+          <div className={`composer-placeholder${isEditor ? ' editor-placeholder' : ''}`} aria-hidden="true">
+            {PLACEHOLDER}
+          </div>
         )}
 
         {suggest && mode === 'source' && options.length > 0 && (() => {

@@ -73,12 +73,19 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   const [listMode, setListMode] = useState<'card' | 'list'>('card')
   const [composerFocus, setComposerFocus] = useState(0)
   const [syncState, setSyncState] = useState<SyncState>('synced')
+  /** Name of the memo whose "more" menu is open — at most one at a time. */
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300)
     return () => clearTimeout(timer)
   }, [query])
+
+  // Navigating, filtering or switching views discards the open menu so it can never reappear.
+  useEffect(() => {
+    setOpenMenu(null)
+  }, [nav, debouncedQuery, tag, day, view, listMode, editing])
 
   const load = useCallback(
     async (reset: boolean) => {
@@ -348,9 +355,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                     key={memo.name}
                     memo={memo}
                     serverUrl={config.serverUrl}
+                    menuOpen={openMenu === memo.name}
+                    onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
                     onChanged={replace}
                     onDeleted={remove}
-                    onEdit={(m) => { setEditing(m); }}
+                    onEdit={(m) => { setOpenMenu(null); setEditing(m); }}
                     onSelectTag={selectTag}
                   />
                 ))}
