@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AppConfig, User } from '@shared/types'
+import { applyTheme, watchSystemAppearance } from './lib/theme'
 import { SignIn } from './views/SignIn'
 import { Timeline } from './views/Timeline'
 
@@ -17,6 +18,12 @@ export function App(): JSX.Element {
       setChecking(false)
     })()
   }, [])
+
+  useEffect(() => {
+    if (!config) return
+    applyTheme(config.theme, config.appearance)
+    return watchSystemAppearance(config.theme, config.appearance)
+  }, [config?.theme, config?.appearance])
 
   const onSignedIn = useCallback((signedIn: User, next: AppConfig) => {
     setUser(signedIn)

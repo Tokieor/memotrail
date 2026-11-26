@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, Appearance, ThemeId } from '@shared/types'
 import { describeError } from '../lib/errors'
 import { formatAccelerator } from '../lib/accelerator'
+import { applyTheme } from '../lib/theme'
 import { CheckIcon, ChevronIcon, EyeIcon, SyncIcon } from './Icons'
 
 interface Props {
@@ -13,6 +14,17 @@ interface Props {
 }
 
 type SettingsSection = 'connection' | 'general' | 'shortcut' | 'appearance' | 'about'
+
+const THEME_OPTIONS: { id: ThemeId; label: string; hint: string }[] = [
+  { id: 'classic', label: '经典', hint: '暖白纸感底色，鼠尾草绿强调色' },
+  { id: 'minimal', label: '简约', hint: '纯黑白灰，不用彩色强调' }
+]
+
+const APPEARANCE_OPTIONS: { id: Appearance; label: string }[] = [
+  { id: 'light', label: '浅色' },
+  { id: 'dark', label: '深色' },
+  { id: 'system', label: '跟随系统' }
+]
 
 const SECTIONS: { key: SettingsSection; label: string }[] = [
   { key: 'general', label: '通用' },
@@ -52,6 +64,17 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
       const next = await window.api.config.set({ quickHotkey: hotkey, launchAtLogin })
       onConfigChange(next)
       setMessage('已保存')
+    } catch (err) {
+      setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
+    }
+  }
+
+  async function chooseLook(patch: { theme?: ThemeId; appearance?: Appearance }): Promise<void> {
+    try {
+      const next = await window.api.config.set(patch)
+      onConfigChange(next)
+      applyTheme(next.theme, next.appearance)
+      setMessage('')
     } catch (err) {
       setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     }
@@ -208,10 +231,51 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
         )}
 
         {section === 'appearance' && (
-          <div className="settings-card">
-            <h3 className="settings-card-title">外观</h3>
-            <p style={{ fontSize: 12, color: 'var(--muted)' }}>当前使用暖白纸感主题，强调色为鼠尾草绿。更多主题即将推出。</p>
-          </div>
+          <>
+            <div className="settings-card">
+              <h3 className="settings-card-title">配色主题</h3>
+              <div className="pref-row">
+                <div className="pref-meta">
+                  <span className="pref-title">{THEME_OPTIONS.find((option) => option.id === config.theme)?.label ?? '经典'}</span>
+                  <span className="pref-sub">{THEME_OPTIONS.find((option) => option.id === config.theme)?.hint}</span>
+                </div>
+                <div className="segmented">
+                  {THEME_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={config.theme === option.id ? 'active' : ''}
+                      onClick={() => void chooseLook({ theme: option.id })}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-card">
+              <h3 className="settings-card-title">明暗模式</h3>
+              <div className="pref-row">
+                <div className="pref-meta">
+                  <span className="pref-title">{APPEARANCE_OPTIONS.find((option) => option.id === config.appearance)?.label}</span>
+                  <span className="pref-sub">跟随系统时，macOS 切换外观会自动同步</span>
+                </div>
+                <div className="segmented">
+                  {APPEARANCE_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={config.appearance === option.id ? 'active' : ''}
+                      onClick={() => void chooseLook({ appearance: option.id })}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
         {section === 'about' && (

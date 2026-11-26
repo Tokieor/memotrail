@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
-import { BoltIcon, ImageIcon, LinkIcon, TagIcon } from './components/Icons'
+import { BoltIcon, ImageIcon, LinkIcon } from './components/Icons'
 import { formatAccelerator } from './lib/accelerator'
+import { applyCachedTheme, applyTheme, watchSystemAppearance } from './lib/theme'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from './lib/tag-suggest'
 
 type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC'
@@ -28,6 +29,7 @@ function QuickCapture(): JSX.Element {
       const config = await window.api.config.get()
       setConfigured(Boolean(config?.serverUrl))
       if (config?.quickHotkey) setHotkey(config.quickHotkey)
+      if (config?.theme) applyTheme(config.theme, config.appearance)
       const status = await window.api.auth.status()
       if (status.success && status.data) {
         const preferred = status.data?.defaultVisibility as Visibility | undefined
@@ -36,7 +38,18 @@ function QuickCapture(): JSX.Element {
     })()
   }, [])
 
-  useEffect(() => window.api.config.onChange((next) => setHotkey(next.quickHotkey)), [])
+  useEffect(() => window.api.config.onChange((next) => {
+    setHotkey(next.quickHotkey)
+    applyTheme(next.theme, next.appearance)
+  }), [])
+
+  useEffect(() => {
+    applyCachedTheme()
+    void window.api.config.get().then((config) => {
+      applyTheme(config.theme, config.appearance)
+      return watchSystemAppearance(config.theme, config.appearance)
+    })
+  }, [])
 
   // 最近用过的标签：拿一页笔记现算，拿不到就算了（未登录/离线时静默）。
   useEffect(() => {
@@ -215,8 +228,8 @@ function QuickCapture(): JSX.Element {
             const element = input.current
             if (element && tags.length > 0) setSuggest({ start: position, query: '', index: 0, point: caretPoint(element, position + 1) })
           }}
-          title="插入标签"
-        ><TagIcon size={13} /><span>标签</span></button>
+          title="插入标签 #"
+        ><span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1 }}>#</span></button>
         <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片"><ImageIcon size={16} /></button>
         <button className="tool-btn plain" onClick={() => insertAtCursor('[]()')} title="插入链接"><LinkIcon size={16} /></button>
         <select

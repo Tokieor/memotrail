@@ -7,7 +7,9 @@ const DEFAULTS: AppConfig = {
   serverUrl: '',
   username: '',
   quickHotkey: 'CommandOrControl+Shift+M',
-  launchAtLogin: false
+  launchAtLogin: false,
+  theme: 'classic',
+  appearance: 'light'
 }
 
 interface StoredConfig extends AppConfig {
@@ -35,6 +37,8 @@ function read(): StoredConfig {
       username: typeof raw.username === 'string' ? raw.username : DEFAULTS.username,
       quickHotkey: typeof raw.quickHotkey === 'string' && raw.quickHotkey ? raw.quickHotkey : DEFAULTS.quickHotkey,
       launchAtLogin: raw.launchAtLogin === true,
+      theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
+      appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {})
     }
   } catch {

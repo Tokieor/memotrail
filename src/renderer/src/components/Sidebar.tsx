@@ -13,7 +13,7 @@ import {
 export type NavKey = 'all' | 'today' | 'starred' | 'archive'
 export type SyncState = 'synced' | 'syncing' | 'error'
 
-const TAG_TONES = ['#5C7F6F', '#C99A5B', '#7B96B0', '#B98C88', '#5C7F6F', '#C99A5B', '#7B96B0', '#B98C88']
+const TAG_TONES = ['var(--tone-1)', 'var(--tone-2)', 'var(--tone-3)', 'var(--tone-4)']
 
 interface Props {
   config: AppConfig

@@ -9,10 +9,10 @@ function base({ size = 18, ...props }: IconProps): SVGProps<SVGSVGElement> {
 export function LogoMark({ size = 28 }: { size?: number }): JSX.Element {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="4" y="3" width="20" height="22" rx="5" fill="#5C7F6F" />
-      <path d="M16 3v5h8" stroke="#F2F1ED" strokeWidth="1.5" fill="none" />
-      <rect x="8" y="12" width="10" height="2" rx="1" fill="#FFFFFF" />
-      <rect x="8" y="17" width="7" height="2" rx="1" fill="#FFFFFF" opacity="0.65" />
+      <rect x="4" y="3" width="20" height="22" rx="5" fill="var(--accent)" />
+      <path d="M16 3v5h8" stroke="var(--paper)" strokeWidth="1.5" fill="none" />
+      <rect x="8" y="12" width="10" height="2" rx="1" fill="var(--on-accent)" />
+      <rect x="8" y="17" width="7" height="2" rx="1" fill="var(--on-accent)" opacity="0.65" />
     </svg>
   )
 }

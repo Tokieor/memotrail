@@ -34,6 +34,12 @@ export type ApiResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; status?: number }
 
+/** Visual style preset: `classic` keeps the sage accent, `minimal` is pure black/white/grey. */
+export type ThemeId = 'classic' | 'minimal'
+
+/** Colour scheme preference; `system` follows the OS. */
+export type Appearance = 'light' | 'dark' | 'system'
+
 export interface AppConfig {
   /** Server base URL, e.g. `https://memos.example.com`. No trailing slash. */
   serverUrl: string
@@ -42,6 +48,8 @@ export interface AppConfig {
   /** Electron accelerator for the quick-capture window. */
   quickHotkey: string
   launchAtLogin: boolean
+  theme: ThemeId
+  appearance: Appearance
 }
 
 export interface ListMemosOptions {
