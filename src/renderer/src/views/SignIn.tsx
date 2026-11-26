@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { AppConfig, User } from '@shared/types'
 import { describeError } from '../lib/errors'
+import { LogoMark } from '../components/Icons'
 
 interface Props {
   config: AppConfig
@@ -30,57 +31,38 @@ export function SignIn({ config, onSignedIn }: Props): JSX.Element {
   }
 
   return (
-    <div className="flex h-full items-center justify-center p-8">
-      <form onSubmit={submit} className="w-full max-w-sm">
-        <h1 className="mb-1 text-2xl font-semibold">MemoTrail</h1>
-        <p className="mb-6 text-sm" style={{ color: 'var(--text-soft)' }}>
-          连接你的 Memos 服务器
-        </p>
+    <div className="signin-wrap">
+      <div className="signin-card">
+        <div className="signin-brand">
+          <LogoMark size={40} />
+          <div>
+            <h1>轻笺</h1>
+            <p>MEMOS DESKTOP</p>
+          </div>
+        </div>
+        <p className="signin-lead">连接你的 Memos 服务器，开始记录</p>
 
-        <label className="mb-1 block text-xs" style={{ color: 'var(--text-soft)' }}>
-          服务器地址
-        </label>
-        <input
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:border-[var(--accent)]"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)' }}
-          value={serverUrl}
-          onChange={(e) => setServerUrl(e.target.value)}
-          placeholder="https://memos.example.com"
-          autoFocus
-        />
+        <form onSubmit={submit}>
+          <div className="field-group">
+            <label className="field-label">服务器地址</label>
+            <div className="field-input"><input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)} placeholder="https://memos.example.com" autoFocus /></div>
+          </div>
+          <div className="field-group">
+            <label className="field-label">用户名</label>
+            <div className="field-input"><input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="你的账号" /></div>
+          </div>
+          <div className="field-group">
+            <label className="field-label">密码</label>
+            <div className="field-input"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div>
+          </div>
 
-        <label className="mb-1 block text-xs" style={{ color: 'var(--text-soft)' }}>
-          用户名
-        </label>
-        <input
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:border-[var(--accent)]"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)' }}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+          {error && <p className="inline-error" style={{ marginBottom: 12 }}>{error}</p>}
 
-        <label className="mb-1 block text-xs" style={{ color: 'var(--text-soft)' }}>
-          密码
-        </label>
-        <input
-          type="password"
-          className="mb-4 w-full rounded-lg border px-3 py-2 outline-none focus:border-[var(--accent)]"
-          style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)' }}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-
-        {error && <p className="mb-3 text-xs" style={{ color: '#d33' }}>{error}</p>}
-
-        <button
-          type="submit"
-          disabled={busy || !serverUrl || !username || !password}
-          className="w-full rounded-lg px-3 py-2 font-medium text-white disabled:opacity-50"
-          style={{ background: 'var(--accent)' }}
-        >
-          {busy ? '连接中…' : '登录'}
-        </button>
-      </form>
+          <button type="submit" className="primary-btn signin-submit" disabled={busy || !serverUrl || !username || !password}>
+            {busy ? '连接中…' : '连接并登录'}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

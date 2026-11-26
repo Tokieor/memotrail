@@ -7,13 +7,13 @@ let mainWindow: BrowserWindow | null = null
 
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1000,
-    height: 740,
-    minWidth: 720,
-    minHeight: 520,
+    width: 1280,
+    height: 800,
+    minWidth: 960,
+    minHeight: 600,
     show: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f7f6f3',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -65,8 +65,8 @@ export function showQuickWindow(): BrowserWindow {
   }
 
   quickWindow = new BrowserWindow({
-    width: 560,
-    height: 220,
+    width: 604,
+    height: 300,
     frame: false,
     transparent: true,
     resizable: false,

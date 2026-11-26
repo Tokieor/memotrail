@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { fileToBase64, isImage } from '../lib/files'
+import { ImageIcon, LinkIcon, TagIcon } from './Icons'
 
 interface Props {
   /** When set the composer edits an existing memo instead of creating one. */
@@ -11,6 +12,9 @@ interface Props {
   submitLabel?: string
   /** Bump to focus the textarea from a keyboard shortcut. */
   focusSignal?: number
+  /** 'feed' = inline quick capture; 'editor' = full detail/edit card. */
+  variant?: 'feed' | 'editor'
+  /** Called when the visibility selector changes, so the editor can reflect it. */
   onSubmitted: (memo: Memo) => void
   onCancel?: () => void
 }
@@ -30,6 +34,7 @@ export function Composer({
   autoFocus = false,
   focusSignal = 0,
   submitLabel,
+  variant = 'feed',
   onSubmitted,
   onCancel
 }: Props): JSX.Element {
@@ -118,8 +123,10 @@ export function Composer({
     setBusy(false)
   }
 
+  const isEditor = variant === 'editor'
+
   return (
-    <div className="rounded-xl border p-3" style={{ borderColor: 'var(--border)' }}>
+    <div className={isEditor ? 'editor-composer' : 'composer'}>
       <textarea
         ref={ref}
         value={content}
@@ -131,9 +138,11 @@ export function Composer({
           }
           if (e.key === 'Escape' && onCancel) onCancel()
         }}
-        rows={memoName ? 5 : 3}
-        placeholder="记点什么…支持 Markdown 和 #标签（⌘/Ctrl + Enter 保存，可直接粘贴/拖入图片）"
-        className="w-full resize-none bg-transparent outline-none"
+        rows={isEditor ? 12 : 3}
+        placeholder={isEditor
+          ? '写下你的想法…支持 Markdown 与 #标签，可直接粘贴或拖入图片'
+          : '此刻有什么想记录的？换个标签，或直接开始写…'}
+        className={isEditor ? 'editor-textarea' : ''}
         onPaste={(e) => {
           const files = Array.from(e.clipboardData.files)
           if (files.length === 0) return
@@ -148,57 +157,53 @@ export function Composer({
         }}
         onDragOver={(e) => e.preventDefault()}
       />
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <select
-            value={visibility}
-            onChange={(e) => setVisibility(e.target.value as Visibility)}
-            className="rounded-md border bg-transparent px-1.5 py-1 text-xs outline-none"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}
-          >
-            {VISIBILITIES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => fileInput.current?.click()}
-            disabled={uploading}
-            className="rounded-md border px-1.5 py-0.5 text-xs disabled:opacity-50"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-soft)' }}
-          >
-            {uploading ? '上传中…' : '附件'}
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              for (const file of Array.from(e.target.files ?? [])) void upload(file)
-              e.target.value = ''
-            }}
-          />
-          <span className="text-xs" style={{ color: error ? '#d33' : 'var(--text-soft)' }}>
-            {error || `${content.trim().length} 字`}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {onCancel && (
-            <button onClick={onCancel} className="rounded-lg px-2 py-1 text-sm" style={{ color: 'var(--text-soft)' }}>
-              取消
-            </button>
-          )}
-          <button
-            onClick={() => void submit()}
-            disabled={busy || !content.trim()}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-            style={{ background: 'var(--accent)' }}
-          >
-            {busy ? '保存中…' : (submitLabel ?? (memoName ? '保存修改' : '记下'))}
-          </button>
-        </div>
+
+      {error && <p className="inline-error" style={{ margin: '4px 0 8px' }}>{error}</p>}
+
+      {!isEditor && <div className="composer-divider" />}
+
+      <div className="composer-footer">
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value as Visibility)}
+          className="visibility-select"
+          title="可见范围"
+        >
+          {VISIBILITIES.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
+        <button className="tool-btn" onClick={() => insertAtCursor('#')} title="插入标签">
+          <TagIcon size={13} /><span>标签</span>
+        </button>
+        <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件">
+          <ImageIcon size={17} />
+        </button>
+        <button className="tool-btn plain" onClick={() => insertAtCursor('[]()')} title="插入链接">
+          <LinkIcon size={17} />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          hidden
+          onChange={(e) => {
+            for (const file of Array.from(e.target.files ?? [])) void upload(file)
+            e.target.value = ''
+          }}
+        />
+        <span className="spacer" />
+        <span className="quick-hint">{error ? '' : `${content.trim().length} 字`} · Ctrl/⌘+Enter 保存</span>
+        {onCancel && (
+          <button className="ghost-btn" onClick={onCancel}>取消</button>
+        )}
+        <button
+          className="primary-btn"
+          onClick={() => void submit()}
+          disabled={busy || !content.trim()}
+        >
+          {busy ? '保存中…' : (submitLabel ?? (memoName ? '保存修改' : '记一笔'))}
+        </button>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
+import { HashChipIcon, MoreIcon, StarIcon } from './Icons'
 
 interface Props {
   memo: Memo
@@ -8,13 +9,21 @@ interface Props {
   onChanged: (memo: Memo) => void
   onDeleted: (name: string) => void
   onEdit: (memo: Memo) => void
+  onSelectTag?: (tag: string) => void
 }
 
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
-export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit }: Props): JSX.Element {
+function toneFor(tag: string): string {
+  let hash = 0
+  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) | 0
+  return ['green', 'amber', 'blue', 'rose'][Math.abs(hash) % 4]
+}
+
+export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSelectTag }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const html = useMemo(() => renderMarkdown(memo.content), [memo.content])
 
   async function run(action: () => Promise<{ success: boolean; data?: Memo; error?: string }>): Promise<void> {
@@ -46,57 +55,46 @@ export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit }: Prop
   }
 
   return (
-    <article
-      className="group rounded-xl border p-4 transition-colors"
-      style={{ borderColor: 'var(--border)', background: 'var(--bg-soft)', opacity: busy ? 0.6 : 1 }}
-    >
-      <div className="markdown break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
-
-      <div className="mt-2 flex items-center justify-between text-xs" style={{ color: 'var(--text-soft)' }}>
-        <div className="flex items-center gap-2">
-          <span title={memo.createTime}>{relativeTime(memo.createTime)}</span>
-          {memo.visibility !== 'PRIVATE' && <span>· {VISIBILITY_LABEL[memo.visibility] ?? memo.visibility}</span>}
-          {memo.pinned && <span>· 已置顶</span>}
-          {memo.tags?.map((tag) => (
-            <span key={tag} style={{ color: 'var(--accent)' }}>
-              #{tag}
-            </span>
-          ))}
-        </div>
-        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <IconButton label={memo.pinned ? '取消置顶' : '置顶'} onClick={() => void run(() => window.api.memos.update(memo.name, { pinned: !memo.pinned }))}>
-            {memo.pinned ? '取消置顶' : '置顶'}
-          </IconButton>
-          <IconButton label="编辑" onClick={() => onEdit(memo)}>
-            编辑
-          </IconButton>
-          <IconButton label="复制" onClick={() => void navigator.clipboard.writeText(memo.content)}>
-            复制
-          </IconButton>
-          <IconButton label="删除" onClick={() => void remove()}>
-            删除
-          </IconButton>
+    <article className={`note-card${busy ? ' busy' : ''}`}>
+      <div className="tag-row">
+        {(memo.tags ?? []).map((tag) => (
+          <button key={tag} className={`tag-chip ${toneFor(tag)}`} onClick={() => onSelectTag?.(tag)}>
+            <HashChipIcon size={11} />
+            <span>{tag}</span>
+          </button>
+        ))}
+        <span className="spacer" />
+        <div style={{ position: 'relative' }}>
+          <button className="meta-btn" title="更多" onClick={() => setMenuOpen((v) => !v)}>
+            <MoreIcon size={16} />
+          </button>
+          {menuOpen && (
+            <div className="card-menu" onMouseLeave={() => setMenuOpen(false)}>
+              <button className="action-btn" onClick={() => { setMenuOpen(false); onEdit(memo) }}>编辑</button>
+              <button className="action-btn" onClick={() => { setMenuOpen(false); void navigator.clipboard.writeText(memo.content) }}>复制</button>
+              <button className="action-btn danger" onClick={() => { setMenuOpen(false); void remove() }}>删除</button>
+            </div>
+          )}
         </div>
       </div>
 
-      {error && (
-        <p className="mt-1 text-xs" style={{ color: '#d33' }}>
-          {error}
-        </p>
-      )}
-    </article>
-  )
-}
+      <div className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
 
-function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }): JSX.Element {
-  return (
-    <button
-      title={label}
-      onClick={onClick}
-      className="rounded-md px-1.5 py-0.5 hover:bg-black/5 dark:hover:bg-white/10"
-      style={{ color: 'var(--text-soft)' }}
-    >
-      {children}
-    </button>
+      <div className="meta-row">
+        <span title={memo.createTime}>{relativeTime(memo.createTime)}</span>
+        {memo.visibility !== 'PRIVATE' && <span>· {VISIBILITY_LABEL[memo.visibility] ?? memo.visibility}</span>}
+        {memo.pinned && <span>· 已置顶</span>}
+        <span className="spacer" />
+        <button
+          className={`meta-btn${memo.pinned ? ' on' : ''}`}
+          title={memo.pinned ? '取消置顶' : '置顶'}
+          onClick={() => void run(() => window.api.memos.update(memo.name, { pinned: !memo.pinned }))}
+        >
+          <StarIcon size={14} filled={Boolean(memo.pinned)} />
+        </button>
+      </div>
+
+      {error && <p className="inline-error" style={{ marginTop: 8 }}>{error}</p>}
+    </article>
   )
 }

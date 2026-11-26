@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
+import { BoltIcon, ImageIcon, LinkIcon, TagIcon } from './components/Icons'
 
 type Visibility = 'PRIVATE' | 'PROTECTED' | 'PUBLIC'
 type State = 'idle' | 'sending' | 'done' | 'error'
@@ -34,6 +35,17 @@ function QuickCapture(): JSX.Element {
     else localStorage.removeItem(DRAFT_KEY)
   }, [content])
 
+  function insertAtCursor(text: string): void {
+    const el = input.current
+    const pos = el?.selectionStart ?? content.length
+    setContent((cur) => cur.slice(0, pos) + text + cur.slice(pos))
+    requestAnimationFrame(() => {
+      el?.focus()
+      const next = pos + text.length
+      el?.setSelectionRange(next, next)
+    })
+  }
+
   async function submit(): Promise<void> {
     const text = content.trim()
     if (!text || state === 'sending') return
@@ -55,79 +67,68 @@ function QuickCapture(): JSX.Element {
     }
   }
 
-  const hint =
-    configured === false
-      ? '还没有配置服务器，点右上角「打开 MemoTrail」完成登录'
-      : state === 'sending'
-        ? '发送中…'
-        : state === 'error'
-          ? message
-          : state === 'done'
-            ? '已记录 ✓'
-            : 'Enter 保存 · Shift+Enter 换行 · Esc 关闭'
-
   return (
-    <div
-      className="flex h-full w-full flex-col gap-2 rounded-2xl p-4 shadow-2xl"
-      style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium tracking-wide" style={{ color: 'var(--text-soft)' }}>
-          MEMOTRAIL · 快速记录
-        </span>
+    <div className="quick-card" style={{ margin: 8 }}>
+      <div className="quick-header">
+        <span style={{ color: 'var(--accent)', lineHeight: 0 }}><BoltIcon size={18} /></span>
+        <span className="title">快速记录</span>
+        <span className="kbd">Ctrl/⌘+Shift+Space</span>
         <button
           type="button"
-          onClick={() => {
-            void window.api.quick.showMain()
-            void window.api.quick.hide()
-          }}
-          className="rounded-md px-2 py-0.5 text-[11px]"
-          style={{ color: 'var(--text-soft)' }}
+          onClick={() => { void window.api.quick.showMain(); void window.api.quick.hide() }}
+          className="ghost-btn"
+          style={{ height: 26, fontSize: 11 }}
         >
-          打开 MemoTrail
+          打开主界面
         </button>
       </div>
 
-      <textarea
-        ref={input}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            void window.api.quick.hide()
-          } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-            e.preventDefault()
-            void submit()
-          }
-        }}
-        rows={3}
-        placeholder="记点什么…支持 Markdown 和 #标签"
-        className="w-full flex-1 resize-none bg-transparent text-[15px] outline-none"
-      />
+      <div className="quick-body-area">
+        <textarea
+          ref={input}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              void window.api.quick.hide()
+            } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              void submit()
+            }
+          }}
+          rows={3}
+          placeholder="刚想到什么？随手记下来…支持 Markdown 和 #标签"
+        />
+      </div>
 
-      <div className="flex items-center justify-between gap-2 text-xs" style={{ color: state === 'error' ? '#d33' : 'var(--text-soft)' }}>
+      <div className="quick-footer">
+        <button className="tool-btn" onClick={() => insertAtCursor('#')} title="插入标签"><TagIcon size={13} /><span>标签</span></button>
+        <button className="tool-btn plain" onClick={() => insertAtCursor('![]()')} title="插入图片"><ImageIcon size={16} /></button>
+        <button className="tool-btn plain" onClick={() => insertAtCursor('[]()')} title="插入链接"><LinkIcon size={16} /></button>
         <select
           value={visibility}
           onChange={(e) => setVisibility(e.target.value as Visibility)}
-          className="rounded-md px-1 py-0.5 text-[11px]"
-          style={{ background: 'var(--bg-soft, transparent)', border: '1px solid var(--border)', color: 'var(--text)' }}
+          className="visibility-select"
+          title="可见范围"
         >
           {(Object.keys(VISIBILITY_LABEL) as Visibility[]).map((key) => (
-            <option key={key} value={key}>
-              {VISIBILITY_LABEL[key]}
-            </option>
+            <option key={key} value={key}>{VISIBILITY_LABEL[key]}</option>
           ))}
         </select>
-        <span className="flex-1 truncate">{hint}</span>
+        <span className="spacer" />
+        <span className={`quick-hint${state === 'error' ? ' inline-error' : ''}`}>
+          {configured === false
+            ? '请先在主界面登录'
+            : state === 'sending' ? '发送中…' : state === 'done' ? '已记录' : state === 'error' ? message : 'Enter 保存 · Esc 关闭'}
+        </span>
         <button
           type="button"
           onClick={() => void submit()}
           disabled={!content.trim() || state === 'sending'}
-          className="rounded-md px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-40"
-          style={{ background: 'var(--accent)' }}
+          className="primary-btn"
         >
-          记下
+          保存笔记
         </button>
       </div>
     </div>
