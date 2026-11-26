@@ -6,6 +6,8 @@ import { MoreIcon, StarIcon } from './Icons'
 interface Props {
   memo: Memo
   serverUrl: string
+  /** Tag name → CSS colour, so a customised tag keeps its colour inside note bodies. */
+  tagColors?: Record<string, string>
   /** Owned by the feed list so only one card's menu can be open at a time. */
   menuOpen: boolean
   onMenuOpenChange: (open: boolean) => void
@@ -95,12 +97,12 @@ function CardMenu({ anchor, onClose, onEdit, onCopy, onDelete }: CardMenuProps):
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
 export function MemoCard({
-  memo, serverUrl, menuOpen, onMenuOpenChange, onChanged, onDeleted, onEdit, onSelectTag
+  memo, serverUrl, tagColors, menuOpen, onMenuOpenChange, onChanged, onDeleted, onEdit, onSelectTag
 }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const menuButton = useRef<HTMLButtonElement>(null)
-  const html = useMemo(() => renderMarkdown(memo.content), [memo.content])
+  const html = useMemo(() => renderMarkdown(memo.content, tagColors), [memo.content, tagColors])
 
   async function run(action: () => Promise<{ success: boolean; data?: Memo; error?: string }>): Promise<void> {
     setBusy(true)

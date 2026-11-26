@@ -141,3 +141,39 @@ export function CodeIcon(props: IconProps): JSX.Element {
 export function CodeBlockIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" /><path d="M9 9l-2 3 2 3M15 9l2 3-2 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
+
+/* Tag list controls */
+export function SortIcon(props: IconProps): JSX.Element {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h10M18 17h2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="16" cy="7" r="2" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="10" cy="12" r="2" stroke="currentColor" strokeWidth="1.7" />
+      <circle cx="16" cy="17" r="2" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  )
+}
+
+export function PinIcon({ filled, ...props }: IconProps & { filled?: boolean }): JSX.Element {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M9 3h6l-1 5 3.2 2.6a1 1 0 0 1-.63 1.78H7.43a1 1 0 0 1-.63-1.78L10 8z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        fill={filled ? 'currentColor' : 'none'}
+      />
+      <path d="M12 12.5V21" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function PencilIcon(props: IconProps): JSX.Element {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M14.5 6.5L17.5 9.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppConfig, Memo, User } from '@shared/types'
+import type { AppConfig, Memo, TagColorKey, TagMetaMap, User } from '@shared/types'
 import { Composer } from '../components/Composer'
 import { MemoCard } from '../components/MemoCard'
 import { SettingsPanel } from '../components/SettingsPanel'
@@ -8,6 +8,10 @@ import type { NavKey, SyncState } from '../components/Sidebar'
 import { describeError } from '../lib/errors'
 import { formatAccelerator } from '../lib/accelerator'
 import {
+  collectTagStats, renameTagToken, sortTags, stripTagToken,
+  type TagSort, type TagStat
+} from '../lib/tags'
+import {
   BackIcon,
   CardViewIcon,
   ListViewIcon,
@@ -15,6 +19,8 @@ import {
   SearchIcon,
   StarIcon
 } from '../components/Icons'
+
+const TAG_SORT_KEY = 'memotrail.tagSort'
 
 interface Props {
   config: AppConfig
@@ -153,15 +159,109 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   }, [load])
 
   // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
-  const [tagCatalog, setTagCatalog] = useState<[string, number][]>([])
+  const [tagStats, setTagStats] = useState<TagStat[]>([])
   useEffect(() => {
     if (tag || debouncedQuery) return
-    const counts = new Map<string, number>()
-    for (const memo of memos) for (const name of memo.tags ?? []) counts.set(name, (counts.get(name) ?? 0) + 1)
-    setTagCatalog(
-      [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12)
-    )
+    setTagStats(collectTagStats(memos))
   }, [memos, tag, debouncedQuery])
+
+  const [tagMeta, setTagMeta] = useState<TagMetaMap>(config.tagMeta ?? {})
+  useEffect(() => {
+    setTagMeta(config.tagMeta ?? {})
+  }, [config.tagMeta])
+
+  const [tagSort, setTagSort] = useState<TagSort>(() => {
+    const stored = localStorage.getItem(TAG_SORT_KEY)
+    return stored === 'frequent' || stored === 'recent' || stored === 'pinned' ? stored : 'all'
+  })
+
+  const tags = useMemo(() => sortTags(tagStats, tagMeta, tagSort), [tagStats, tagMeta, tagSort])
+
+  // Custom colours also apply to the `#tag` chips inside note bodies.
+  const tagColors = useMemo(() => {
+    const map: Record<string, string> = {}
+    for (const [name, entry] of Object.entries(tagMeta)) {
+      if (entry.color) map[name] = `var(--${entry.color})`
+    }
+    return map
+  }, [tagMeta])
+
+  function changeTagSort(next: TagSort): void {
+    setTagSort(next)
+    localStorage.setItem(TAG_SORT_KEY, next)
+  }
+
+  async function persistTagMeta(next: TagMetaMap): Promise<void> {
+    setTagMeta(next)
+    try {
+      const saved = await window.api.config.set({ tagMeta: next })
+      onConfigChange(saved)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  /** Every note carrying the tag, across pages — a rename/delete must not stop at page one. */
+  async function listMemosWithTag(name: string): Promise<Memo[]> {
+    const collected: Memo[] = []
+    let pageToken: string | undefined
+    for (let page = 0; page < 20; page += 1) {
+      const result = await window.api.memos.list({
+        pageSize: 100,
+        filter: buildFilter(false, '', name),
+        pageToken
+      })
+      if (!result.success || !result.data) break
+      collected.push(...(result.data.memos ?? []))
+      pageToken = result.data.nextPageToken || undefined
+      if (!pageToken) break
+    }
+    return collected
+  }
+
+  /** Rewrites every note body; `to === null` removes the tag instead of renaming it. */
+  async function rewriteTag(from: string, to: string | null): Promise<boolean> {
+    const affected = await listMemosWithTag(from)
+    for (const memo of affected) {
+      const next = to === null ? stripTagToken(memo.content, from) : renameTagToken(memo.content, from, to)
+      if (next === memo.content) continue
+      const result = await window.api.memos.update(memo.name, { content: next })
+      if (!result.success) {
+        setError(result.error ?? '更新笔记失败')
+        return false
+      }
+      if (result.data) replace(result.data)
+    }
+    return true
+  }
+
+  async function renameTag(from: string, to: string, color?: TagColorKey): Promise<void> {
+    setError('')
+    if (to !== from && !(await rewriteTag(from, to))) return
+    const next: TagMetaMap = { ...tagMeta }
+    const previous = next[from]
+    delete next[from]
+    const merged = { ...(next[to] ?? {}), ...(previous ?? {}), ...(color ? { color } : {}) }
+    if (Object.keys(merged).length > 0) next[to] = merged
+    await persistTagMeta(next)
+    if (tag === from) setTag(to)
+    if (to !== from) await load(true)
+  }
+
+  async function deleteTag(name: string): Promise<void> {
+    setError('')
+    if (!(await rewriteTag(name, null))) return
+    const next: TagMetaMap = { ...tagMeta }
+    delete next[name]
+    await persistTagMeta(next)
+    if (tag === name) setTag(null)
+    await load(true)
+  }
+
+  function toggleTagPin(name: string): void {
+    const current = tagMeta[name] ?? {}
+    void persistTagMeta({ ...tagMeta, [name]: { ...current, pinned: !current.pinned } })
+  }
 
   const visibleMemos = useMemo(() => {
     if (nav === 'today') return memos.filter(isToday)
@@ -223,12 +323,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         memos={memos}
         activeNav={nav}
         activeTag={tag}
-        tags={tagCatalog}
+        tags={tags}
+        tagSort={tagSort}
         counts={counts}
         sync={{ state: syncState, label: syncLabel, detail: `${serverHost} · ${memos.length} 条笔记` }}
-        onNewNote={() => { setView('feed'); setEditing(null); setComposerFocus((t) => t + 1) }}
         onNavigate={navigate}
         onSelectTag={selectTag}
+        onTagSortChange={changeTagSort}
+        onRenameTag={renameTag}
+        onDeleteTag={deleteTag}
+        onToggleTagPin={toggleTagPin}
         activeDay={day}
         onSelectDay={selectDay}
         onOpenSettings={() => { setEditing(null); setView('settings') }}
@@ -285,7 +389,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                   initialContent={editing.content}
                   initialVisibility={editing.visibility}
                   variant="editor"
-                  tagSuggestions={tagCatalog.map(([name]) => name)}
+                  tagSuggestions={tagStats.map((stat) => stat.name)}
                   autoFocus
                   onSubmitted={(memo) => { replace(memo); setEditing(null) }}
                   onCancel={() => setEditing(null)}
@@ -345,7 +449,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
                 <Composer
                   focusSignal={composerFocus}
-                  tagSuggestions={tagCatalog.map(([name]) => name)}
+                  tagSuggestions={tagStats.map((stat) => stat.name)}
                   onSubmitted={(memo) => setMemos((current) => [memo, ...current])}
                 />
 
@@ -363,6 +467,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                     key={memo.name}
                     memo={memo}
                     serverUrl={config.serverUrl}
+                    tagColors={tagColors}
                     menuOpen={openMenu === memo.name}
                     onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
                     onChanged={replace}

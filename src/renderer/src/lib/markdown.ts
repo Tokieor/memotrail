@@ -39,7 +39,7 @@ export function htmlToMarkdown(html: string): string {
 const TAG_PATTERN = /#([\p{L}\p{N}_\-/]+)/gu
 
 /** Wraps `#tag` occurrences in body text so tags read inline instead of in a separate chip row. */
-function wrapInlineTags(root: HTMLElement): void {
+function wrapInlineTags(root: HTMLElement, tagColors?: Record<string, string>): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   const targets: Text[] = []
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -59,6 +59,9 @@ function wrapInlineTags(root: HTMLElement): void {
       span.className = 'md-tag'
       span.dataset['tag'] = match[1]
       span.textContent = match[0]
+      // A tag keeps the colour the user assigned in the sidebar; otherwise the theme default wins.
+      const custom = tagColors?.[match[1]]
+      if (custom) span.style.color = custom
       fragment.append(span)
       cursor = index + match[0].length
     }
@@ -67,11 +70,11 @@ function wrapInlineTags(root: HTMLElement): void {
   }
 }
 
-export function renderMarkdown(content: string): string {
+export function renderMarkdown(content: string, tagColors?: Record<string, string>): string {
   const html = marked.parse(content, { async: false }) as string
   const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
   const doc = new DOMParser().parseFromString(clean, 'text/html')
-  wrapInlineTags(doc.body)
+  wrapInlineTags(doc.body, tagColors)
   return doc.body.innerHTML.replace(/(<img[^>]+src=")\/file\//g, '$1memotrail://local/file/')
 }
 

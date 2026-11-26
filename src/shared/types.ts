@@ -43,6 +43,17 @@ export type Appearance = 'light' | 'dark' | 'system'
 /** Which card sits above the sidebar navigation. */
 export type SidebarCard = 'heatmap' | 'calendar'
 
+/** Colour keys a tag can be assigned; they resolve to the theme's `--tone-N` variables. */
+export type TagColorKey = 'tone-1' | 'tone-2' | 'tone-3' | 'tone-4'
+
+export interface TagMetaEntry {
+  color?: TagColorKey
+  pinned?: boolean
+}
+
+/** Per-tag UI preferences that the Memos server knows nothing about. Keyed by tag name. */
+export type TagMetaMap = Record<string, TagMetaEntry>
+
 export interface AppConfig {
   /** Server base URL, e.g. `https://memos.example.com`. No trailing slash. */
   serverUrl: string
@@ -54,6 +65,8 @@ export interface AppConfig {
   theme: ThemeId
   appearance: Appearance
   sidebarCard: SidebarCard
+  /** Tag colours and pins, kept locally because the API has no place for them. */
+  tagMeta: TagMetaMap
 }
 
 export interface ListMemosOptions {

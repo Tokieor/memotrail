@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { AppConfig } from '../shared/types'
+import type { AppConfig, TagColorKey, TagMetaEntry, TagMetaMap } from '../shared/types'
 
 const DEFAULTS: AppConfig = {
   serverUrl: '',
@@ -10,7 +10,27 @@ const DEFAULTS: AppConfig = {
   launchAtLogin: false,
   theme: 'classic',
   appearance: 'light',
-  sidebarCard: 'heatmap'
+  sidebarCard: 'heatmap',
+  tagMeta: {}
+}
+
+const TAG_COLORS: TagColorKey[] = ['tone-1', 'tone-2', 'tone-3', 'tone-4']
+
+/** Keeps whatever the renderer (or a hand-edited file) wrote within the shape we understand. */
+function sanitizeTagMeta(raw: unknown): TagMetaMap {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: TagMetaMap = {}
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!name || !value || typeof value !== 'object') continue
+    const entry = value as { color?: unknown; pinned?: unknown }
+    const next: TagMetaEntry = {}
+    if (typeof entry.color === 'string' && TAG_COLORS.includes(entry.color as TagColorKey)) {
+      next.color = entry.color as TagColorKey
+    }
+    if (entry.pinned === true) next.pinned = true
+    if (Object.keys(next).length > 0) out[name] = next
+  }
+  return out
 }
 
 /** Last main-window size, kept out of the renderer-facing config. */
@@ -48,6 +68,7 @@ function read(): StoredConfig {
       theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
+      tagMeta: sanitizeTagMeta(raw.tagMeta),
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {}),
       ...(raw.windowState && typeof raw.windowState.width === 'number' && typeof raw.windowState.height === 'number'
         ? { windowState: { width: raw.windowState.width, height: raw.windowState.height } }
@@ -75,6 +96,7 @@ export function loadConfig(): AppConfig {
 export function saveConfig(patch: Partial<AppConfig>): AppConfig {
   const next: StoredConfig = { ...read(), ...patch }
   if (typeof next.serverUrl === 'string') next.serverUrl = next.serverUrl.trim().replace(/\/+$/, '')
+  next.tagMeta = sanitizeTagMeta(next.tagMeta)
   write(next)
   return loadConfig()
 }
