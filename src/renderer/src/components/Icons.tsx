@@ -120,3 +120,24 @@ export function CardViewIcon(props: IconProps): JSX.Element {
 export function ListViewIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M9 8h11M9 13h11M9 18h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><circle cx="5" cy="8" r="1.3" fill="currentColor" /><circle cx="5" cy="13" r="1.3" fill="currentColor" /><circle cx="5" cy="18" r="1.3" fill="currentColor" /></svg>
 }
+
+/* Markdown toolbar icons */
+export function HeadingIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M5 5v14M13 5v14M5 12h8M16 9l4-2v12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
+export function ListIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M9 7h11M9 12h11M9 17h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /><circle cx="5" cy="7" r="1.3" fill="currentColor" /><circle cx="5" cy="12" r="1.3" fill="currentColor" /><circle cx="5" cy="17" r="1.3" fill="currentColor" /></svg>
+}
+
+export function QuoteIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M7 7h4v5H8.5c-.8 0-1.2.4-1.5 1.2V7zM15 7h4v5h-2.5c-.8 0-1.2.4-1.5 1.2V7z" fill="currentColor" /><path d="M4 19h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+}
+
+export function CodeIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M9 8l-4 4 4 4M15 8l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}
+
+export function CodeBlockIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" /><path d="M9 9l-2 3 2 3M15 9l2 3-2 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+}

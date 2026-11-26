@@ -3,7 +3,7 @@ import type { Memo, Visibility } from '@shared/types'
 import { formatAccelerator } from '../lib/accelerator'
 import { fileToBase64, isImage } from '../lib/files'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
-import { ImageIcon, LinkIcon } from './Icons'
+import { CodeBlockIcon, CodeIcon, HeadingIcon, ImageIcon, LinkIcon, ListIcon, QuoteIcon } from './Icons'
 import { VisibilityPicker } from './VisibilityPicker'
 
 interface Props {
@@ -109,6 +109,84 @@ export function Composer({
       element?.focus()
       const next = position + text.length
       element?.setSelectionRange(next, next)
+    })
+  }
+
+  type MarkKind = 'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'heading' | 'list' | 'quote' | 'link' | 'codeblock'
+
+  /**
+   * Applies a Markdown format to the textarea selection.
+   * Paired marks wrap the selection (or insert `mark|mark` with the caret between); clicking an
+   * already-wrapped selection toggles the mark off. Line marks prefix every selected line.
+   */
+  function applyFormat(kind: MarkKind): void {
+    const element = ref.current
+    if (!element) return
+    // Read the live DOM value so the format always applies to what the user actually sees,
+    // even if React state hasn't caught up (IME composition, rapid clicks).
+    const current = element.value
+    const start = element.selectionStart
+    const end = element.selectionEnd
+    const selected = current.slice(start, end)
+    let next = current
+    let selStart = start
+    let selEnd = end
+
+    if (kind === 'heading' || kind === 'list' || kind === 'quote') {
+      const prefix = kind === 'heading' ? '## ' : kind === 'list' ? '- ' : '> '
+      const lineStart = current.lastIndexOf('\n', start - 1) + 1
+      const lineEndIndex = current.indexOf('\n', end)
+      const lineEnd = lineEndIndex === -1 ? current.length : lineEndIndex
+      const block = current.slice(lineStart, lineEnd)
+      const lines = block.split('\n')
+      // If every selected line already has the prefix, remove it; otherwise add it.
+      const allPrefixed = lines.every((line) => line.startsWith(prefix))
+      const changed = lines
+        .map((line) => allPrefixed ? line.slice(prefix.length) : prefix + line)
+        .join('\n')
+      next = current.slice(0, lineStart) + changed + current.slice(lineEnd)
+      selStart = lineStart
+      selEnd = lineStart + changed.length
+    } else if (kind === 'codeblock') {
+      const wrapped = `\n\`\`\`\n${selected}\n\`\`\`\n`
+      next = current.slice(0, start) + wrapped + current.slice(end)
+      selStart = start + 4
+      selEnd = selStart + selected.length
+    } else if (kind === 'link') {
+      const label = selected || '链接文字'
+      const snippet = `[${label}](url)`
+      next = current.slice(0, start) + snippet + current.slice(end)
+      selStart = start + label.length + 3
+      selEnd = selStart + 3 // select "url" for quick replacement
+    } else {
+      const marks: Record<'bold' | 'italic' | 'strike' | 'underline' | 'code', [string, string]> = {
+        bold: ['**', '**'],
+        italic: ['*', '*'],
+        strike: ['~~', '~~'],
+        underline: ['<u>', '</u>'],
+        code: ['`', '`']
+      }
+      const [open, close] = marks[kind]
+      // Toggle off when the selection is already wrapped by this mark.
+      if (selected.startsWith(open) && selected.endsWith(close) && selected.length >= open.length + close.length) {
+        const inner = selected.slice(open.length, selected.length - close.length)
+        next = current.slice(0, start) + inner + current.slice(end)
+        selStart = start
+        selEnd = start + inner.length
+      } else {
+        next = current.slice(0, start) + open + selected + close + current.slice(end)
+        selStart = start + open.length
+        selEnd = selStart + selected.length
+        // With no selection, leave the caret between the marks so typing goes inside.
+        if (selected.length === 0) selStart = selEnd = start + open.length
+      }
+    }
+
+    setContent(next)
+    setSuggest(null)
+    requestAnimationFrame(() => {
+      element.focus()
+      element.setSelectionRange(selStart, selEnd)
     })
   }
 
@@ -240,6 +318,21 @@ export function Composer({
         </div>
         )
       })()}
+      </div>
+
+      <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
+        <button type="button" className="md-btn md-bold" title="加粗 **文字**" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
+        <button type="button" className="md-btn md-italic" title="斜体 *文字*" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
+        <button type="button" className="md-btn md-strike" title="删除线 ~~文字~~" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
+        <button type="button" className="md-btn md-underline" title="下划线 <u>文字</u>" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
+        <span className="md-sep" />
+        <button type="button" className="md-btn" title="标题 ##" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
+        <button type="button" className="md-btn" title="列表 -" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
+        <button type="button" className="md-btn" title="引用 >" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
+        <span className="md-sep" />
+        <button type="button" className="md-btn" title="行内代码 `文字`" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
+        <button type="button" className="md-btn" title="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
+        <button type="button" className="md-btn" title="链接 [文字](url)" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
       </div>
 
       {error && <p className="inline-error" style={{ margin: '4px 0 8px' }}>{error}</p>}
