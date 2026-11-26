@@ -133,6 +133,18 @@ function collectImages(markdown: string): DraftImage[] {
   return out
 }
 
+/**
+ * Markdown for the editable surface. The trailing `<br>` that keeps an empty last line typeable
+ * is an editing anchor, not content, so it is dropped before conversion.
+ */
+function sourceFrom(root: HTMLElement): string {
+  const clone = root.cloneNode(true) as HTMLElement
+  const blocks = Array.from(clone.querySelectorAll('p, div, li')) as HTMLElement[]
+  const last = blocks[blocks.length - 1] ?? clone
+  while (last.lastChild && last.lastChild.nodeName === 'BR') last.removeChild(last.lastChild)
+  return htmlToMarkdown(clone.innerHTML)
+}
+
 export function Composer({
   memoName,
   initialContent = '',
@@ -247,7 +259,7 @@ export function Composer({
       const selection = window.getSelection()
       const inside = !!selection && selection.rangeCount > 0 && root.contains(selection.getRangeAt(0).startContainer)
       if (!inside && document.activeElement !== root) return
-      if (renderTypedTokens(root)) setContent(htmlToMarkdown(root.innerHTML))
+      if (renderTypedTokens(root)) setContent(sourceFrom(root))
     }
     const schedule = (): void => {
       if (frame === 0) frame = requestAnimationFrame(run)
@@ -298,7 +310,7 @@ export function Composer({
     setSuggest(null)
     // Capture any pending WYSIWYG edits before leaving preview, so the source view is exact.
     if (mode === 'preview' && previewRef.current) {
-      const md = htmlToMarkdown(previewRef.current.innerHTML)
+      const md = sourceFrom(previewRef.current)
       contentRef.current = md
       setContent(md)
     }
@@ -314,7 +326,7 @@ export function Composer({
       pruneEmptyMarks(el)
       clearStrayStyles(el)
     }
-    setContent(htmlToMarkdown(el.innerHTML))
+    setContent(sourceFrom(el))
   }
 
   /** Opens the tag menu anchored under the `#` the caret is sitting on (source mode only). */
@@ -377,7 +389,7 @@ export function Composer({
     insertPlainAfter(guard.mark, extra)
     if ((guard.mark.textContent ?? '').length === 0) {
       guard.mark.remove()
-      setContent(htmlToMarkdown(root.innerHTML))
+      setContent(sourceFrom(root))
     }
   }
 
@@ -389,7 +401,7 @@ export function Composer({
       // Keep the insertion out of a trailing mark, otherwise a `#` ends up underlined.
       escapeTrailingMark(el)
       document.execCommand('insertHTML', false, renderMarkdown(text))
-      setContent(htmlToMarkdown(el.innerHTML))
+      setContent(sourceFrom(el))
       return
     }
     const element = ref.current
@@ -559,7 +571,7 @@ export function Composer({
     range.collapse(true)
     selectRange(range)
     const root = previewRef.current
-    if (root) setContent(htmlToMarkdown(root.innerHTML))
+    if (root) setContent(sourceFrom(root))
   }
 
   /** Deepest trailing text node of `element`, used to peel composed characters back out. */
@@ -589,6 +601,18 @@ export function Composer({
    * Enter in a contenteditable can leave bare text next to `<div>` blocks. Giving the loose run
    * its own paragraph keeps block-level splitting below predictable (and the Markdown unchanged).
    */
+  /**
+   * Inline-only content (what typing into an empty composer produces) has no block to hold the
+   * caret, so Enter and arrow keys behave erratically. Wrapping it in a paragraph makes the
+   * surface behave like rendered Markdown.
+   */
+  function ensureParagraph(root: HTMLElement): void {
+    if ((Array.from(root.children) as HTMLElement[]).some((child) => isBlockEl(child))) return
+    const paragraph = document.createElement('p')
+    while (root.firstChild) paragraph.appendChild(root.firstChild)
+    root.appendChild(paragraph)
+  }
+
   function normalizeBlocks(root: HTMLElement): void {
     if (!(Array.from(root.children) as HTMLElement[]).some((child) => isBlockEl(child))) return
     const loose = (node: Node): boolean => !isBlockEl(node) && (
@@ -735,7 +759,7 @@ export function Composer({
       } else if (kind === 'codeblock') {
         document.execCommand('formatBlock', false, 'pre')
       }
-      setContent(htmlToMarkdown(el.innerHTML))
+      setContent(sourceFrom(el))
       return
     }
 
@@ -888,10 +912,12 @@ export function Composer({
               range.collapse(true)
               selectRange(range)
             } else {
-              const range = document.createRange()
-              range.setStartAfter(element)
-              range.collapse(true)
-              selectRange(range)
+              // A caret expressed as "block, offset after the inline element" looks right but
+              // Chrome resolves it back *into* the mark on the next key press, so the caret can
+              // never leave the freshly rendered word. A paragraph with a real text node behind
+              // the mark gives the caret somewhere stable to stand — and keeps Enter working.
+              ensureParagraph(root)
+              placeCaretAfterPlain(element)
             }
           }
           changed = true
@@ -928,7 +954,7 @@ export function Composer({
     caret.setStart(node, kind === 'link' ? 1 : pair![0].length)
     caret.collapse(true)
     selectRange(caret)
-    setContent(htmlToMarkdown(root.innerHTML))
+    setContent(sourceFrom(root))
   }
 
   /** Removes the empty lines a soft break left at the very end of a block. */
@@ -958,6 +984,42 @@ export function Composer({
    * Enter inside a quote keeps both lines in the same `>` block; a second Enter on the empty
    * line leaves the quote and continues as ordinary text.
    */
+  /**
+   * Enter at the very end of a paragraph whose last child is an inline mark. Left to the browser,
+   * the new line inherits the mark (the caret is resolved back inside it), so the first character
+   * of the next line comes out bold. Splitting the paragraph ourselves keeps the new line plain.
+   */
+  function handleTrailingEnter(event: React.KeyboardEvent<HTMLDivElement>): boolean {
+    if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return false
+    const root = previewRef.current
+    const selection = window.getSelection()
+    if (!root || !selection || !selection.isCollapsed || selection.rangeCount === 0) return false
+    const caret = selection.getRangeAt(0)
+    if (!root.contains(caret.startContainer)) return false
+    const block = blockOf(caret.startContainer, root)
+    if (block === root || (block.tagName !== 'P' && block.tagName !== 'DIV')) return false
+    const rest = document.createRange()
+    rest.setStart(caret.startContainer, caret.startOffset)
+    rest.setEnd(block, block.childNodes.length)
+    if (rest.toString().length > 0) return false
+    const previous = previousTextBefore(root, caret)
+    if (!previous || !outermostMark(previous, root)) return false
+
+    event.preventDefault()
+    const paragraph = document.createElement('p')
+    // An empty paragraph (or one holding an empty text node) gives Chrome no editing anchor, so
+    // it walks back into the previous paragraph's mark. A <br> keeps the caret where it belongs;
+    // it is dropped again before the HTML is read back as Markdown.
+    paragraph.appendChild(document.createElement('br'))
+    block.after(paragraph)
+    const range = document.createRange()
+    range.setStart(paragraph, 0)
+    range.collapse(true)
+    selectRange(range)
+    setContent(sourceFrom(root))
+    return true
+  }
+
   function handleQuoteEnter(event: React.KeyboardEvent<HTMLDivElement>): boolean {
     const root = previewRef.current
     const selection = window.getSelection()
@@ -997,7 +1059,7 @@ export function Composer({
       next.collapse(true)
       selectRange(next)
     }
-    setContent(htmlToMarkdown(root.innerHTML))
+    setContent(sourceFrom(root))
     return true
   }
 
@@ -1042,9 +1104,9 @@ export function Composer({
     // Anything still wrapped in raw markers is finished now — render it before saving.
     const surface = previewRef.current
     if (mode === 'preview' && surface && renderTypedTokens(surface)) {
-      setContent(htmlToMarkdown(surface.innerHTML))
+      setContent(sourceFrom(surface))
     }
-    const text = (mode === 'preview' && surface ? htmlToMarkdown(surface.innerHTML) : content).trim()
+    const text = (mode === 'preview' && surface ? sourceFrom(surface) : content).trim()
     if (!text || busy) return
     setBusy(true)
     setError('')
@@ -1081,7 +1143,10 @@ export function Composer({
             onCompositionStart={beginComposition}
             onCompositionEnd={finishComposition}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && handleQuoteEnter(e)) return
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                if (handleQuoteEnter(e)) return
+                if (handleTrailingEnter(e)) return
+              }
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
                 e.preventDefault()
                 void submit()
