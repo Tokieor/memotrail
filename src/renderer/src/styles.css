@@ -131,8 +131,8 @@ button {
 }
 .sidebar::-webkit-scrollbar { width: 0; }
 
-.brand-row { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 2px; }
-.brand-name { font-size: 16px; font-weight: 600; color: var(--ink); }
+.brand-row { display: flex; align-items: center; gap: 11px; height: 48px; padding: 0 2px; }
+.brand-name { font-size: 21px; font-weight: 600; letter-spacing: -0.2px; color: var(--ink); }
 .brand-sub { font-size: 9px; font-weight: 500; letter-spacing: 1px; color: var(--faint); }
 
 /* Contribution heatmap (replaces the old new-note button) */
@@ -591,3 +591,22 @@ button {
 .markdown img { max-width: 100%; border-radius: 8px; }
 .markdown hr { border: 0; border-top: 1px solid var(--border); margin: 0.8em 0; }
 .markdown input[type='checkbox'] { margin-right: 0.4em; }
+
+/* Inline tags inside note bodies: keep them in the text flow, no extra margins. */
+.md-tag {
+  display: inline;
+  padding: 0 4px;
+  margin: 0;
+  border-radius: 5px;
+  background: rgba(92, 127, 111, 0.12);
+  color: #47685a;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: pointer;
+}
+.md-tag:hover { background: rgba(92, 127, 111, 0.2); }

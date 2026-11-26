@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
-import { HashChipIcon, MoreIcon, StarIcon } from './Icons'
+import { MoreIcon, StarIcon } from './Icons'
 
 interface Props {
   memo: Memo
@@ -13,12 +13,6 @@ interface Props {
 }
 
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
-
-function toneFor(tag: string): string {
-  let hash = 0
-  for (let i = 0; i < tag.length; i++) hash = (hash * 31 + tag.charCodeAt(i)) | 0
-  return ['green', 'amber', 'blue', 'rose'][Math.abs(hash) % 4]
-}
 
 export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSelectTag }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
@@ -45,6 +39,12 @@ export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSele
   }
 
   function openLink(event: React.MouseEvent): void {
+    const tagEl = (event.target as HTMLElement).closest('.md-tag') as HTMLElement | null
+    if (tagEl?.dataset['tag']) {
+      event.preventDefault()
+      onSelectTag?.(tagEl.dataset['tag'])
+      return
+    }
     const anchor = (event.target as HTMLElement).closest('a')
     if (!anchor) return
     event.preventDefault()
@@ -68,17 +68,6 @@ export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit, onSele
           </div>
         )}
       </div>
-
-      {(memo.tags ?? []).length > 0 && (
-        <div className="tag-row tag-row-compact">
-          {(memo.tags ?? []).map((tag) => (
-            <button key={tag} className={`tag-chip ${toneFor(tag)}`} onClick={() => onSelectTag?.(tag)}>
-              <HashChipIcon size={11} />
-              <span>{tag}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
 

@@ -40,9 +40,8 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand-row">
-        <LogoMark size={28} />
+        <LogoMark size={34} />
         <span className="brand-name">MemoTrail</span>
-        <span className="brand-sub">MEMOS DESKTOP</span>
       </div>
 
       <ContributionHeatmap memos={memos} />
