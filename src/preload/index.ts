@@ -20,11 +20,20 @@ const api = {
       ipcRenderer.invoke('memos:update', name, patch) as Promise<{ success: boolean; data?: Memo; error?: string }>,
     remove: (name: string) => ipcRenderer.invoke('memos:delete', name) as Promise<{ success: boolean; error?: string }>
   },
+  attachments: {
+    upload: (payload: { filename: string; type: string; data: string }) =>
+      ipcRenderer.invoke('attachments:upload', payload) as Promise<{
+        success: boolean
+        data?: { name: string; filename: string; type: string; size: string }
+        error?: string
+      }>
+  },
   quick: {
     capture: (payload: QuickCapturePayload) =>
       ipcRenderer.invoke('quick:capture', payload) as Promise<{ success: boolean; data?: Memo; error?: string }>,
     hide: () => ipcRenderer.invoke('quick:hide'),
-    show: () => ipcRenderer.invoke('quick:show')
+    show: () => ipcRenderer.invoke('quick:show'),
+    showMain: () => ipcRenderer.invoke('quick:show-main')
   }
 }
 

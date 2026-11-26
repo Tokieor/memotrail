@@ -26,6 +26,8 @@ export interface User {
   username: string
   displayName?: string
   avatarUrl?: string
+  /** The account's preferred visibility, used to preselect the quick-capture default. */
+  defaultVisibility?: string
 }
 
 export type ApiResult<T> =

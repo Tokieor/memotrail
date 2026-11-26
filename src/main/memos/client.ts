@@ -105,6 +105,29 @@ export async function createMemo(content: string, visibility: Visibility = 'PRIV
   return call<Memo>('/memos', { method: 'POST', body: JSON.stringify({ content, visibility }) })
 }
 
+export interface Attachment {
+  name: string
+  filename: string
+  type: string
+  size: string
+}
+
+/**
+ * 0.31.0 takes the file inline as base64 in `content` — a multipart POST to the same route is
+ * decoded as JSON by the gateway and fails with `invalid character '-' in numeric literal`.
+ */
+export async function uploadAttachment(filename: string, type: string, base64: string): Promise<ApiResult<Attachment>> {
+  return call<Attachment>('/attachments', { method: 'POST', body: JSON.stringify({ filename, type, content: base64 }) })
+}
+
+export function currentBaseUrl(): string {
+  return baseUrl
+}
+
+export function currentToken(): string | null {
+  return accessToken
+}
+
 export interface MemoPatch {
   content?: string
   visibility?: Visibility

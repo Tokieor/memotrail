@@ -2,7 +2,7 @@ import { app, ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import * as memos from './memos/client'
 import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
-import { hideQuickWindow, showQuickWindow } from './windows'
+import { hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
 import { registerQuickHotkey } from './hotkeys'
 
 /** Only the app's own pages may talk to these handlers. */
@@ -21,8 +21,15 @@ function handle<A extends unknown[], R>(channel: string, fn: (...args: A) => R |
 export function registerIpc(): void {
   handle('config:get', () => loadConfig())
   handle('config:set', (patch: Partial<AppConfig>) => {
+    const previous = loadConfig()
     const next = saveConfig(patch)
-    if (patch.quickHotkey !== undefined) registerQuickHotkey(next.quickHotkey)
+    if (patch.quickHotkey !== undefined && patch.quickHotkey !== previous.quickHotkey) {
+      if (!registerQuickHotkey(next.quickHotkey)) {
+        const reverted = saveConfig({ quickHotkey: previous.quickHotkey })
+        registerQuickHotkey(reverted.quickHotkey)
+        throw new Error(`快捷键 ${patch.quickHotkey} 被系统或其它应用占用，已恢复为 ${reverted.quickHotkey}`)
+      }
+    }
     if (patch.launchAtLogin !== undefined && process.platform !== 'linux') {
       app.setLoginItemSettings({ openAtLogin: next.launchAtLogin })
     }
@@ -44,6 +51,9 @@ export function registerIpc(): void {
   })
 
   handle('memos:list', (options: ListMemosOptions) => memos.listMemos(options))
+  handle('attachments:upload', (_event, payload: { filename: string; type: string; data: string }) =>
+    memos.uploadAttachment(payload.filename, payload.type, payload.data)
+  )
   handle('memos:update', (_event, name: string, patch: memos.MemoPatch) => memos.updateMemo(name, patch))
   handle('memos:delete', (_event, name: string) => memos.deleteMemo(name))
   handle('memos:create', (content: string, visibility?: Visibility) => memos.createMemo(content, visibility))
@@ -56,5 +66,8 @@ export function registerIpc(): void {
   handle('quick:hide', () => hideQuickWindow())
   handle('quick:show', () => {
     showQuickWindow()
+  })
+  handle('quick:show-main', () => {
+    showMainWindow()
   })
 }

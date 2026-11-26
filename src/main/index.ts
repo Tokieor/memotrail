@@ -1,36 +1,31 @@
-import { app, BrowserWindow } from 'electron'
+import { app } from 'electron'
 import { loadConfig } from './config'
 import { registerQuickHotkey, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
+import { handleFileProtocol, registerFileScheme } from './protocol'
 import { createTray } from './tray'
-import { createMainWindow, showQuickWindow } from './windows'
+import { createMainWindow, showMainWindow, showQuickWindow } from './windows'
 
-let mainWindow: BrowserWindow | null = null
+registerFileScheme()
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (!mainWindow) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+    showMainWindow()
   })
 
   void app.whenReady().then(() => {
     const config = loadConfig()
     if (config.serverUrl) memos.setBaseUrl(config.serverUrl)
 
+    handleFileProtocol()
     registerIpc()
-    mainWindow = createMainWindow()
+    createMainWindow()
 
     createTray({
-      open: () => {
-        if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createMainWindow()
-        mainWindow.show()
-        mainWindow.focus()
-      },
+      open: () => showMainWindow(),
       quickCapture: () => showQuickWindow(),
       quit: () => app.quit()
     })
@@ -39,10 +34,7 @@ if (!app.requestSingleInstanceLock()) {
       console.warn(`[memotrail] the shortcut ${config.quickHotkey} is taken; change it in Settings`)
     }
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow()
-      else mainWindow?.show()
-    })
+    app.on('activate', () => showMainWindow())
   })
 
   app.on('will-quit', () => unregisterHotkeys())

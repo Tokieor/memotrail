@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
 
+let mainWindow: BrowserWindow | null = null
+
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1000,
@@ -28,10 +30,24 @@ export function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
+
   if (RENDERER_URL) void win.loadURL(RENDERER_URL)
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 
+  mainWindow = win
   return win
+}
+
+/** Brings the timeline window forward, recreating it if the user closed it (macOS dock behaviour). */
+export function showMainWindow(): BrowserWindow {
+  if (!mainWindow || mainWindow.isDestroyed()) return createMainWindow()
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  return mainWindow
 }
 
 let quickWindow: BrowserWindow | null = null

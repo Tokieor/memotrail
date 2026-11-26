@@ -3,10 +3,15 @@ import { marked } from 'marked'
 
 marked.setOptions({ gfm: true, breaks: true })
 
-/** Memos stores Markdown; render it, then strip anything dangerous before it reaches the DOM. */
+/**
+ * Memos stores Markdown; render it, then strip anything dangerous before it reaches the DOM.
+ * Server-relative attachment URLs (`/file/...`) are rewritten onto the private `memotrail://`
+ * scheme so images load with the Bearer token attached by the main process.
+ */
 export function renderMarkdown(content: string): string {
   const html = marked.parse(content, { async: false }) as string
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+  return clean.replace(/(<img[^>]+src=")\/file\//g, '$1memotrail://local/file/')
 }
 
 /** "刚刚 / 5 分钟前 / 昨天 14:20 / 3 月 2 日" — compact, good enough for a timeline. */

@@ -4,6 +4,7 @@ import { relativeTime, renderMarkdown } from '../lib/markdown'
 
 interface Props {
   memo: Memo
+  serverUrl: string
   onChanged: (memo: Memo) => void
   onDeleted: (name: string) => void
   onEdit: (memo: Memo) => void
@@ -11,7 +12,7 @@ interface Props {
 
 const VISIBILITY_LABEL: Record<string, string> = { PRIVATE: '私密', PROTECTED: '受保护', PUBLIC: '公开', SPACE: '空间' }
 
-export function MemoCard({ memo, onChanged, onDeleted, onEdit }: Props): JSX.Element {
+export function MemoCard({ memo, serverUrl, onChanged, onDeleted, onEdit }: Props): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const html = useMemo(() => renderMarkdown(memo.content), [memo.content])
@@ -39,7 +40,9 @@ export function MemoCard({ memo, onChanged, onDeleted, onEdit }: Props): JSX.Ele
     if (!anchor) return
     event.preventDefault()
     const href = anchor.getAttribute('href')
-    if (href) window.open(href, '_blank')
+    if (!href) return
+    // Server-relative links (attachments, images) only resolve against the Memos origin.
+    window.open(href.startsWith('/') ? `${serverUrl.replace(/\/+$/, '')}${href}` : href, '_blank')
   }
 
   return (
