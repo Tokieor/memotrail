@@ -1,5 +1,6 @@
 import type { AppConfig, Memo, User } from '@shared/types'
 import { ContributionHeatmap } from './ContributionHeatmap'
+import { MiniCalendar } from './MiniCalendar'
 import {
   ArchiveIcon,
   CalendarIcon,
@@ -44,7 +45,7 @@ export function Sidebar({
         <span className="brand-name">MemoTrail</span>
       </div>
 
-      <ContributionHeatmap memos={memos} />
+      {config.sidebarCard === 'calendar' ? <MiniCalendar memos={memos} /> : <ContributionHeatmap memos={memos} />}
 
       <nav className="nav-list">
         <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag} onClick={() => onNavigate('all')} />

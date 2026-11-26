@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { AppConfig, Appearance, ThemeId } from '@shared/types'
+import type { AppConfig, Appearance, SidebarCard, ThemeId } from '@shared/types'
 import { describeError } from '../lib/errors'
 import { formatAccelerator } from '../lib/accelerator'
 import { applyTheme } from '../lib/theme'
@@ -18,6 +18,11 @@ type SettingsSection = 'connection' | 'general' | 'shortcut' | 'appearance' | 'a
 const THEME_OPTIONS: { id: ThemeId; label: string; hint: string }[] = [
   { id: 'classic', label: '经典', hint: '暖白纸感底色，鼠尾草绿强调色' },
   { id: 'minimal', label: '简约', hint: '纯黑白灰，不用彩色强调' }
+]
+
+const SIDEBAR_OPTIONS: { id: SidebarCard; label: string }[] = [
+  { id: 'heatmap', label: '热力图' },
+  { id: 'calendar', label: '日历' }
 ]
 
 const APPEARANCE_OPTIONS: { id: Appearance; label: string }[] = [
@@ -69,7 +74,7 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
     }
   }
 
-  async function chooseLook(patch: { theme?: ThemeId; appearance?: Appearance }): Promise<void> {
+  async function chooseLook(patch: { theme?: ThemeId; appearance?: Appearance; sidebarCard?: SidebarCard }): Promise<void> {
     try {
       const next = await window.api.config.set(patch)
       onConfigChange(next)
@@ -268,6 +273,28 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                       type="button"
                       className={config.appearance === option.id ? 'active' : ''}
                       onClick={() => void chooseLook({ appearance: option.id })}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="settings-card">
+              <h3 className="settings-card-title">侧栏卡片</h3>
+              <div className="pref-row">
+                <div className="pref-meta">
+                  <span className="pref-title">{config.sidebarCard === 'calendar' ? '日历' : '热力图'}</span>
+                  <span className="pref-sub">侧边栏顶部展示写作日历，或最近十二周的热力图</span>
+                </div>
+                <div className="segmented">
+                  {SIDEBAR_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={config.sidebarCard === option.id ? 'active' : ''}
+                      onClick={() => void chooseLook({ sidebarCard: option.id })}
                     >
                       {option.label}
                     </button>

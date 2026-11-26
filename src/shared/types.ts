@@ -40,6 +40,9 @@ export type ThemeId = 'classic' | 'minimal'
 /** Colour scheme preference; `system` follows the OS. */
 export type Appearance = 'light' | 'dark' | 'system'
 
+/** Which card sits above the sidebar navigation. */
+export type SidebarCard = 'heatmap' | 'calendar'
+
 export interface AppConfig {
   /** Server base URL, e.g. `https://memos.example.com`. No trailing slash. */
   serverUrl: string
@@ -50,6 +53,7 @@ export interface AppConfig {
   launchAtLogin: boolean
   theme: ThemeId
   appearance: Appearance
+  sidebarCard: SidebarCard
 }
 
 export interface ListMemosOptions {

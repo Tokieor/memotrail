@@ -9,7 +9,8 @@ const DEFAULTS: AppConfig = {
   quickHotkey: 'CommandOrControl+Shift+M',
   launchAtLogin: false,
   theme: 'classic',
-  appearance: 'light'
+  appearance: 'light',
+  sidebarCard: 'heatmap'
 }
 
 interface StoredConfig extends AppConfig {
@@ -39,6 +40,7 @@ function read(): StoredConfig {
       launchAtLogin: raw.launchAtLogin === true,
       theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
+      sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {})
     }
   } catch {
