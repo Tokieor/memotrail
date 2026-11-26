@@ -13,7 +13,6 @@ import {
   ListViewIcon,
   MoreIcon,
   SearchIcon,
-  SettingsIcon,
   StarIcon
 } from '../components/Icons'
 
@@ -320,17 +319,26 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 />
                 <span className="kbd">{formatAccelerator('CommandOrControl+F')}</span>
               </label>
-              <div className="view-switch">
-                <button className={listMode === 'card' ? 'active' : ''} title="卡片视图" onClick={() => setListMode('card')}>
+              <div className="view-switch" role="group" aria-label="视图切换">
+                <button
+                  className={listMode === 'card' ? 'active' : ''}
+                  title="卡片视图"
+                  aria-label="卡片视图"
+                  aria-pressed={listMode === 'card'}
+                  onClick={() => setListMode('card')}
+                >
                   <CardViewIcon size={18} />
                 </button>
-                <button className={listMode === 'list' ? 'active' : ''} title="列表视图" onClick={() => setListMode('list')}>
+                <button
+                  className={listMode === 'list' ? 'active' : ''}
+                  title="列表视图"
+                  aria-label="列表视图"
+                  aria-pressed={listMode === 'list'}
+                  onClick={() => setListMode('list')}
+                >
                   <ListViewIcon size={18} />
                 </button>
               </div>
-              <button className="ghost-btn" onClick={() => setView('settings')} title="设置">
-                <SettingsIcon size={18} />
-              </button>
             </header>
 
             <div className="feed-scroll">
