@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppConfig, Memo, MemoState, TagColorKey, TagMetaMap, User } from '@shared/types'
 import { Composer } from '../components/Composer'
 import { MemoCard } from '../components/MemoCard'
+import { visibleLength } from '../lib/text'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { Sidebar } from '../components/Sidebar'
 import type { NavKey, SyncState } from '../components/Sidebar'
@@ -471,7 +472,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 <div className="meta-row" style={{ marginTop: 0 }}>
                   <span>创建于 {editing.createTime ? new Date(editing.createTime).toLocaleString('zh-CN') : '—'}</span>
                   <span className="spacer" />
-                  <span>{editing.content.length} 字</span>
+                  <span>{visibleLength(editing.content)} 字</span>
                 </div>
               </div>
             </div>

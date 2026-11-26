@@ -152,7 +152,14 @@ export function MemoCard({
   }
 
   return (
-    <article className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}${memo.pinned ? ' is-pinned' : ''}`}>
+    <article
+      className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}${memo.pinned ? ' is-pinned' : ''}`}
+      onDoubleClick={(event) => {
+        // Only the card body opens the editor; buttons, links and tag chips keep their own click.
+        if ((event.target as HTMLElement).closest('button, a, input, textarea, .md-tag')) return
+        onEdit(memo)
+      }}
+    >
       <div className="card-tools">
         <button
           ref={menuButton}

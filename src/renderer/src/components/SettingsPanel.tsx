@@ -242,73 +242,59 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
         )}
 
         {section === 'appearance' && (
-          <>
-            <div className="settings-card">
-              <h3 className="settings-card-title">配色主题</h3>
-              <div className="pref-row">
-                <div className="pref-meta">
-                  <span className="pref-title">{THEME_OPTIONS.find((option) => option.id === config.theme)?.label ?? '经典'}</span>
-                  <span className="pref-sub">{THEME_OPTIONS.find((option) => option.id === config.theme)?.hint}</span>
-                </div>
-                <div className="segmented">
-                  {THEME_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={config.theme === option.id ? 'active' : ''}
-                      onClick={() => void chooseLook({ theme: option.id })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+          <div className="settings-card">
+            <h3 className="settings-card-title">外观</h3>
+            <div className="pref-row compact">
+              <span className="pref-title">配色主题</span>
+              <div className="segmented">
+                {THEME_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    title={option.hint}
+                    className={config.theme === option.id ? 'active' : ''}
+                    onClick={() => void chooseLook({ theme: option.id })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="settings-card">
-              <h3 className="settings-card-title">明暗模式</h3>
-              <div className="pref-row">
-                <div className="pref-meta">
-                  <span className="pref-title">{APPEARANCE_OPTIONS.find((option) => option.id === config.appearance)?.label}</span>
-                  <span className="pref-sub">跟随系统时，macOS 切换外观会自动同步</span>
-                </div>
-                <div className="segmented">
-                  {APPEARANCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={config.appearance === option.id ? 'active' : ''}
-                      onClick={() => void chooseLook({ appearance: option.id })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="pref-row compact">
+              <span className="pref-title">明暗模式</span>
+              <div className="segmented">
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    title={option.id === 'system' ? '跟随系统时，切换 macOS 外观会自动同步' : option.label}
+                    className={config.appearance === option.id ? 'active' : ''}
+                    onClick={() => void chooseLook({ appearance: option.id })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="settings-card">
-              <h3 className="settings-card-title">侧栏卡片</h3>
-              <div className="pref-row">
-                <div className="pref-meta">
-                  <span className="pref-title">{config.sidebarCard === 'calendar' ? '日历' : '热力图'}</span>
-                  <span className="pref-sub">侧边栏顶部展示写作日历，或最近十二周的热力图</span>
-                </div>
-                <div className="segmented">
-                  {SIDEBAR_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={config.sidebarCard === option.id ? 'active' : ''}
-                      onClick={() => void chooseLook({ sidebarCard: option.id })}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="pref-row compact">
+              <span className="pref-title">侧栏卡片</span>
+              <div className="segmented">
+                {SIDEBAR_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    title={option.id === 'calendar' ? '侧栏顶部展示写作日历，可点某天筛选' : '侧栏顶部展示最近十二周的写作热力图'}
+                    className={config.sidebarCard === option.id ? 'active' : ''}
+                    onClick={() => void chooseLook({ sidebarCard: option.id })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {section === 'about' && (

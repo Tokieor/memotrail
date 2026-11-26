@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo, Visibility } from '@shared/types'
 import { formatAccelerator } from '../lib/accelerator'
+import { visibleLength } from '../lib/text'
 import { fileToBase64, isImage } from '../lib/files'
 import { attachmentUrl, htmlToMarkdown, renderMarkdown } from '../lib/markdown'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from '../lib/tag-suggest'
@@ -169,7 +170,7 @@ export function Composer({
   const isEmpty = content.trim().length === 0
   const images = useMemo(() => collectImages(content), [content])
   /** Image tokens carry long attachment URLs — they must not inflate the character counter. */
-  const textLength = useMemo(() => content.replace(/!\[[^\]]*\]\([^)\s]+\)/g, '').trim().length, [content])
+  const textLength = useMemo(() => visibleLength(content), [content])
   const [lightbox, setLightbox] = useState<DraftImage | null>(null)
 
   // Escape closes the enlarged view without also cancelling the whole composer.

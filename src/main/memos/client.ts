@@ -158,8 +158,23 @@ export async function listMemos(options: ListMemosOptions = {}): Promise<ApiResu
   return call<MemoList>(build(), { method: 'GET' })
 }
 
+/**
+ * 0.31.0 rejects bodies that reference an image it considers unmanaged:
+ * `managed image attachment <id> must be bound to the memo`. Echoing every referenced attachment
+ * back as `attachments: [{ name }]` is what binds them.
+ */
+const ATTACHMENT_REF = /\/file\/attachments\/([A-Za-z0-9_-]+)\//g
+
+function boundAttachments(content: string): { name: string }[] {
+  const names = new Set<string>()
+  for (const match of content.matchAll(ATTACHMENT_REF)) names.add(`attachments/${match[1]}`)
+  return [...names].map((name) => ({ name }))
+}
+
 export async function createMemo(content: string, visibility: Visibility = 'PRIVATE'): Promise<ApiResult<Memo>> {
-  return call<Memo>('/memos', { method: 'POST', body: JSON.stringify({ content, visibility }) })
+  const attachments = boundAttachments(content)
+  const body = attachments.length > 0 ? { content, visibility, attachments } : { content, visibility }
+  return call<Memo>('/memos', { method: 'POST', body: JSON.stringify(body) })
 }
 
 export interface Attachment {
@@ -197,9 +212,15 @@ export interface MemoPatch {
 export async function updateMemo(name: string, patch: MemoPatch): Promise<ApiResult<Memo>> {
   const mask = Object.keys(patch).filter((key) => patch[key as keyof MemoPatch] !== undefined)
   if (mask.length === 0) return { success: false, error: 'Nothing to update' }
+  const body: Record<string, unknown> = { ...patch }
+  if (patch.content !== undefined) {
+    // Rewriting the body re-validates every image reference, so the binding list travels with it.
+    mask.push('attachments')
+    body['attachments'] = boundAttachments(patch.content)
+  }
   return call<Memo>(`/${name}?updateMask=${encodeURIComponent(mask.join(','))}`, {
     method: 'PATCH',
-    body: JSON.stringify(patch)
+    body: JSON.stringify(body)
   })
 }
 
