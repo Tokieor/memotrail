@@ -17,6 +17,7 @@ interface Cell {
   outside: boolean
   isToday: boolean
   count: number
+  level: number
 }
 
 /** Month grid with a dot on days that already have notes. */
@@ -47,12 +48,15 @@ export function MiniCalendar({ memos }: Props): JSX.Element {
       const date = new Date(start)
       date.setDate(start.getDate() + index)
       const key = dayKey(date)
+      const count = counts.get(key) ?? 0
       list.push({
         key,
         day: date.getDate(),
         outside: date.getMonth() !== cursor.getMonth(),
         isToday: key === todayKey,
-        count: counts.get(key) ?? 0
+        count,
+        // Same four-step scale as the contribution heatmap.
+        level: count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count === 3 ? 3 : 4
       })
     }
     // Drop the trailing week when it belongs entirely to the next month.
@@ -82,11 +86,11 @@ export function MiniCalendar({ memos }: Props): JSX.Element {
         {cells.map((cell) => (
           <span
             key={cell.key}
-            className={`calendar-day${cell.outside ? ' outside' : ''}${cell.isToday ? ' today' : ''}`}
+            className={`calendar-day heat-${cell.outside ? 0 : cell.level}${cell.outside ? ' outside' : ''}${cell.isToday ? ' today' : ''}`}
             title={cell.count ? `${cell.count} 条笔记` : undefined}
           >
             {cell.day}
-            {cell.count > 0 && !cell.outside && <i className="calendar-dot" />}
+            {cell.isToday && <i className="calendar-dot" />}
           </span>
         ))}
       </div>
