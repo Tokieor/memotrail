@@ -36,11 +36,24 @@ function isToday(memo: Memo): boolean {
 }
 
 /** Builds the CEL expression Memos 0.31.0 expects in `?filter=`. */
-export function buildFilter(pinned: boolean, query: string, tag: string | null): string | undefined {
+function dayRange(day: string): { start: string; end: string } {
+  const [year, month, date] = day.split('-').map(Number)
+  const start = new Date(year, month - 1, date)
+  const end = new Date(year, month - 1, date + 1)
+  const iso = (value: Date): string => value.toISOString().replace(/\.\d+Z$/, 'Z')
+  return { start: iso(start), end: iso(end) }
+}
+
+/** Builds the CEL expression Memos 0.31.0 expects in `?filter=`. */
+export function buildFilter(pinned: boolean, query: string, tag: string | null, day?: string | null): string | undefined {
   const parts: string[] = []
   if (pinned) parts.push('pinned == true')
   if (query.trim()) parts.push(`content.contains(${JSON.stringify(query.trim())})`)
   if (tag) parts.push(`${JSON.stringify(tag)} in tags`)
+  if (day) {
+    const { start, end } = dayRange(day)
+    parts.push(`created_ts >= timestamp("${start}") && created_ts < timestamp("${end}")`)
+  }
   return parts.length > 0 ? parts.join(' && ') : undefined
 }
 
@@ -53,6 +66,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [tag, setTag] = useState<string | null>(null)
+  const [day, setDay] = useState<string | null>(null)
   const [editing, setEditing] = useState<Memo | null>(null)
   const [view, setView] = useState<View>('feed')
   const [listMode, setListMode] = useState<'card' | 'list'>('card')
@@ -75,7 +89,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       // Archive is not a server filter in the current API; handled client-side below.
       const result = await window.api.memos.list({
         pageSize: 50,
-        filter: buildFilter(pinned, debouncedQuery, effectiveTag),
+        filter: buildFilter(pinned, debouncedQuery, effectiveTag, day),
         pageToken: reset ? undefined : nextPageToken
       })
       if (result.success && result.data) {
@@ -89,13 +103,13 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       }
       setLoading(false)
     },
-    [nav, debouncedQuery, tag, nextPageToken]
+    [nav, debouncedQuery, tag, day, nextPageToken]
   )
 
   useEffect(() => {
     void load(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav, debouncedQuery, tag])
+  }, [nav, debouncedQuery, tag, day])
 
   // Writes from the quick-capture window (and any other window) reload the timeline.
   useEffect(() => window.api.memos.onChange(() => void load(true)), [load])
@@ -166,6 +180,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     setView('feed')
     setEditing(null)
     setTag(null)
+    setDay(null)
     setNav(key)
   }
 
@@ -173,13 +188,25 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     setView('feed')
     setEditing(null)
     setNav('all')
+    setDay(null)
     setTag(next)
+  }
+
+  /** Clicking the same day again clears the filter. */
+  function selectDay(next: string | null): void {
+    setView('feed')
+    setEditing(null)
+    setTag(null)
+    setNav('all')
+    setDay((current) => (current === next ? null : next))
   }
 
   const syncLabel = syncState === 'error' ? '同步失败' : syncState === 'syncing' ? '同步中' : '已同步'
   const serverHost = config.serverUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
 
-  const viewTitle = tag ? `#${tag}` : nav === 'starred' ? '星标' : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
+  const viewTitle = day
+    ? `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日`
+    : tag ? `#${tag}` : nav === 'starred' ? '星标' : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
 
   return (
     <div className="app-shell">
@@ -195,6 +222,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         onNewNote={() => { setView('feed'); setEditing(null); setComposerFocus((t) => t + 1) }}
         onNavigate={navigate}
         onSelectTag={selectTag}
+        activeDay={day}
+        onSelectDay={selectDay}
         onOpenSettings={() => { setEditing(null); setView('settings') }}
       />
 
@@ -268,7 +297,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
             <header className="topbar">
               <div>
                 <h1>{viewTitle}</h1>
-                <p className="subtitle">共 {visibleMemos.length} 条 · 今天新增 {counts.today} 条</p>
+                <p className="subtitle">
+                  {day ? `共 ${visibleMemos.length} 条 · 再点一次日期可取消筛选` : `共 ${visibleMemos.length} 条 · 今天新增 ${counts.today} 条`}
+                </p>
               </div>
               <span className="spacer" />
               <label className="search-box">

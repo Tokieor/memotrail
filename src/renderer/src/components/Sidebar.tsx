@@ -28,12 +28,14 @@ interface Props {
   onNewNote: () => void
   onNavigate: (key: NavKey) => void
   onSelectTag: (tag: string | null) => void
+  activeDay?: string | null
+  onSelectDay?: (day: string | null) => void
   onOpenSettings: () => void
 }
 
 export function Sidebar({
   config, user, memos, activeNav, activeTag, tags, counts, sync,
-  onNewNote, onNavigate, onSelectTag, onOpenSettings
+  onNewNote, onNavigate, onSelectTag, onOpenSettings, activeDay = null, onSelectDay
 }: Props): JSX.Element {
   const serverHost = config.serverUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
   const initial = (user.displayName || user.username || '·').slice(0, 1).toUpperCase()
@@ -45,7 +47,11 @@ export function Sidebar({
         <span className="brand-name">MemoTrail</span>
       </div>
 
-      {config.sidebarCard === 'calendar' ? <MiniCalendar memos={memos} /> : <ContributionHeatmap memos={memos} />}
+      {config.sidebarCard === 'calendar' ? (
+        <MiniCalendar memos={memos} selectedDay={activeDay} onSelectDay={onSelectDay} />
+      ) : (
+        <ContributionHeatmap memos={memos} />
+      )}
 
       <nav className="nav-list">
         <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag} onClick={() => onNavigate('all')} />

@@ -3,6 +3,9 @@ import type { Memo } from '@shared/types'
 
 interface Props {
   memos: Memo[]
+  /** `YYYY-MM-DD` of the day currently filtered, if any. */
+  selectedDay?: string | null
+  onSelectDay?: (day: string) => void
 }
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
@@ -21,7 +24,7 @@ interface Cell {
 }
 
 /** Month grid with a dot on days that already have notes. */
-export function MiniCalendar({ memos }: Props): JSX.Element {
+export function MiniCalendar({ memos, selectedDay = null, onSelectDay }: Props): JSX.Element {
   const today = new Date()
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
 
@@ -55,12 +58,18 @@ export function MiniCalendar({ memos }: Props): JSX.Element {
         outside: date.getMonth() !== cursor.getMonth(),
         isToday: key === todayKey,
         count,
-        // Same four-step scale as the contribution heatmap.
-        level: count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count === 3 ? 3 : 4
+        level: 0
       })
     }
     // Drop the trailing week when it belongs entirely to the next month.
     while (list.length > 35 && list.slice(-7).every((cell) => cell.outside)) list.splice(-7)
+
+    // Levels are relative to the busiest day of the visible month, so a light
+    // month still shows contrast and a heavy one does not turn uniformly dark.
+    const peak = list.reduce((max, cell) => (cell.outside ? max : Math.max(max, cell.count)), 0)
+    for (const cell of list) {
+      cell.level = cell.count === 0 || peak === 0 ? 0 : Math.min(4, Math.ceil((cell.count / peak) * 4))
+    }
     return list
   }, [cursor, counts])
 
@@ -84,14 +93,16 @@ export function MiniCalendar({ memos }: Props): JSX.Element {
 
       <div className="calendar-grid">
         {cells.map((cell) => (
-          <span
+          <button
             key={cell.key}
-            className={`calendar-day heat-${cell.outside ? 0 : cell.level}${cell.outside ? ' outside' : ''}${cell.isToday ? ' today' : ''}`}
-            title={cell.count ? `${cell.count} 条笔记` : undefined}
+            type="button"
+            className={`calendar-day heat-${cell.outside ? 0 : cell.level}${cell.outside ? ' outside' : ''}${cell.isToday ? ' today' : ''}${cell.key === selectedDay ? ' selected' : ''}`}
+            title={cell.count ? `${cell.count} 条笔记` : '没有笔记'}
+            onClick={() => onSelectDay?.(cell.key)}
           >
             {cell.day}
             {cell.isToday && <i className="calendar-dot" />}
-          </span>
+          </button>
         ))}
       </div>
     </div>
