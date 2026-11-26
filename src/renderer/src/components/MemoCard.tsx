@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
-import { MoreIcon, StarIcon } from './Icons'
+import { MoreIcon, PinIcon } from './Icons'
 
 interface Props {
   memo: Memo
@@ -19,8 +19,10 @@ interface Props {
 
 interface CardMenuProps {
   anchor: React.RefObject<HTMLButtonElement>
+  pinned: boolean
   onClose: () => void
   onEdit: () => void
+  onPin: () => void
   onCopy: () => void
   onDelete: () => void
 }
@@ -30,7 +32,7 @@ interface CardMenuProps {
  * and the owning card carries a raised z-index (`.note-card.menu-open`) so it also paints above
  * the following cards instead of sliding under them.
  */
-function CardMenu({ anchor, onClose, onEdit, onCopy, onDelete }: CardMenuProps): JSX.Element {
+function CardMenu({ anchor, pinned, onClose, onEdit, onPin, onCopy, onDelete }: CardMenuProps): JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const closeRef = useRef(onClose)
@@ -88,6 +90,9 @@ function CardMenu({ anchor, onClose, onEdit, onCopy, onDelete }: CardMenuProps):
       style={pos ? { top: pos.top, left: pos.left } : { top: 0, left: 0, visibility: 'hidden' }}
     >
       <button className="action-btn" role="menuitem" onClick={() => { onClose(); onEdit() }}>编辑</button>
+      <button className="action-btn" role="menuitem" onClick={() => { onClose(); onPin() }}>
+        {pinned ? '取消置顶' : '置顶'}
+      </button>
       <button className="action-btn" role="menuitem" onClick={() => { onClose(); onCopy() }}>复制</button>
       <button className="action-btn danger" role="menuitem" onClick={() => { onClose(); onDelete() }}>删除</button>
     </div>
@@ -139,7 +144,7 @@ export function MemoCard({
   }
 
   return (
-    <article className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}`}>
+    <article className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}${memo.pinned ? ' is-pinned' : ''}`}>
       <div className="card-tools">
         <button
           ref={menuButton}
@@ -156,8 +161,10 @@ export function MemoCard({
       {menuOpen && (
         <CardMenu
           anchor={menuButton}
+          pinned={Boolean(memo.pinned)}
           onClose={() => onMenuOpenChange(false)}
           onEdit={() => onEdit(memo)}
+          onPin={() => { void togglePin() }}
           onCopy={() => { void navigator.clipboard.writeText(memo.content) }}
           onDelete={() => { void remove() }}
         />
@@ -168,18 +175,24 @@ export function MemoCard({
       <div className="meta-row">
         <span title={memo.createTime}>{relativeTime(memo.createTime)}</span>
         {memo.visibility !== 'PRIVATE' && <span>· {VISIBILITY_LABEL[memo.visibility] ?? memo.visibility}</span>}
-        {memo.pinned && <span>· 已置顶</span>}
+        {memo.pinned && <span className="pinned-flag">· 置顶</span>}
         <span className="spacer" />
         <button
-          className={`meta-btn${memo.pinned ? ' on' : ''}`}
+          className={`meta-btn pin-btn${memo.pinned ? ' on' : ''}`}
           title={memo.pinned ? '取消置顶' : '置顶'}
-          onClick={() => void run(() => window.api.memos.update(memo.name, { pinned: !memo.pinned }))}
+          aria-label={memo.pinned ? '取消置顶' : '置顶'}
+          aria-pressed={Boolean(memo.pinned)}
+          onClick={() => void togglePin()}
         >
-          <StarIcon size={14} filled={Boolean(memo.pinned)} />
+          <PinIcon size={14} filled={Boolean(memo.pinned)} />
         </button>
       </div>
 
       {error && <p className="inline-error" style={{ marginTop: 8 }}>{error}</p>}
     </article>
   )
+
+  async function togglePin(): Promise<void> {
+    await run(() => window.api.memos.update(memo.name, { pinned: !memo.pinned }))
+  }
 }

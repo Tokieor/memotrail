@@ -81,12 +81,14 @@ export function BackIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M18 8l-7 7 7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
+/* Both marks are drawn on the accent chip, so they must follow the active palette instead of a
+   baked-in brand colour — otherwise 「简约」 still shows a sage checkmark. */
 export function CheckIcon(props: IconProps): JSX.Element {
-  return <svg {...base(props)}><circle cx="12" cy="12" r="9" fill="#5C7F6F" /><path d="M8 12l3 3 5-6" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+  return <svg {...base(props)}><circle cx="12" cy="12" r="9" fill="var(--accent)" /><path d="M8 12l3 3 5-6" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
 export function ClearIcon(props: IconProps): JSX.Element {
-  return <svg {...base(props)}><circle cx="12" cy="12" r="9" fill="#DCD8D0" /><path d="M9 9l6 6M15 9l-6 6" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" /></svg>
+  return <svg {...base(props)}><circle cx="12" cy="12" r="9" fill="var(--chip-off)" /><path d="M9 9l6 6M15 9l-6 6" stroke="var(--on-accent)" strokeWidth="2" strokeLinecap="round" /></svg>
 }
 
 export function ChevronIcon(props: IconProps): JSX.Element {

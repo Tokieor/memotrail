@@ -16,8 +16,8 @@ import {
   CardViewIcon,
   ListViewIcon,
   MoreIcon,
-  SearchIcon,
-  StarIcon
+  PinIcon,
+  SearchIcon
 } from '../components/Icons'
 
 const TAG_SORT_KEY = 'memotrail.tagSort'
@@ -269,6 +269,19 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     return memos
   }, [memos, nav])
 
+  /**
+   * Pinned notes float above the rest so 「置顶」 means the same thing here as in the sidebar.
+   * `Array.prototype.sort` is stable, so the server's newest-first order survives inside a group;
+   * the starred view is already all-pinned and keeps its plain order.
+   */
+  const ordered = useMemo(() => {
+    if (nav === 'starred') return visibleMemos
+    return [...visibleMemos.filter((memo) => memo.pinned), ...visibleMemos.filter((memo) => !memo.pinned)]
+  }, [visibleMemos, nav])
+
+  const pinnedMemos = useMemo(() => ordered.filter((memo) => memo.pinned), [ordered])
+  const restMemos = useMemo(() => ordered.filter((memo) => !memo.pinned), [ordered])
+
   const counts = useMemo(() => ({
     all: memos.length,
     today: memos.filter(isToday).length,
@@ -313,7 +326,24 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   const viewTitle = day
     ? `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日`
-    : tag ? `#${tag}` : nav === 'starred' ? '星标' : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
+    : tag ? `#${tag}` : nav === 'starred' ? '置顶' : nav === 'today' ? '今日' : nav === 'archive' ? '归档' : '全部笔记'
+
+  function renderMemo(memo: Memo): JSX.Element {
+    return (
+      <MemoCard
+        key={memo.name}
+        memo={memo}
+        serverUrl={config.serverUrl}
+        tagColors={tagColors}
+        menuOpen={openMenu === memo.name}
+        onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
+        onChanged={replace}
+        onDeleted={remove}
+        onEdit={(m) => { setOpenMenu(null); setEditing(m) }}
+        onSelectTag={selectTag}
+      />
+    )
+  }
 
   return (
     <div className="app-shell">
@@ -371,11 +401,12 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               <span className="spacer" />
               <span className="save-state"><span className="status-dot" />已保存</span>
               <button
-                className={`ghost-btn${editing.pinned ? '' : ''}`}
+                className={`ghost-btn${editing.pinned ? ' on' : ''}`}
                 title={editing.pinned ? '取消置顶' : '置顶'}
+                aria-pressed={Boolean(editing.pinned)}
                 onClick={() => void runPin(editing)}
               >
-                <StarIcon size={18} filled={Boolean(editing.pinned)} />
+                <PinIcon size={18} filled={Boolean(editing.pinned)} />
               </button>
               <button className="ghost-btn" title="更多" onClick={() => setEditing(null)}>
                 <MoreIcon size={18} />
@@ -409,7 +440,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               <div>
                 <h1>{viewTitle}</h1>
                 <p className="subtitle">
-                  {day ? `共 ${visibleMemos.length} 条 · 再点一次日期可取消筛选` : `共 ${visibleMemos.length} 条 · 今天新增 ${counts.today} 条`}
+                  {day
+                    ? `共 ${visibleMemos.length} 条 · 再点一次日期可取消筛选`
+                    : `共 ${visibleMemos.length} 条${pinnedMemos.length > 0 ? ` · 置顶 ${pinnedMemos.length}` : ''} · 今天新增 ${counts.today} 条`}
                 </p>
               </div>
               <span className="spacer" />
@@ -453,7 +486,10 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                   onSubmitted={(memo) => setMemos((current) => [memo, ...current])}
                 />
 
-                <div className="feed-section-label">最近</div>
+                {/* With pins in play the two groups carry their own labels; otherwise keep «最近». */}
+                {pinnedMemos.length === 0 && restMemos.length > 0 && (
+                  <div className="feed-section-label">最近</div>
+                )}
 
                 {error && <p className="inline-error" style={{ marginBottom: 12 }}>{error}</p>}
                 {!error && !loading && visibleMemos.length === 0 && (
@@ -462,20 +498,19 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                   </div>
                 )}
 
-                {visibleMemos.map((memo) => (
-                  <MemoCard
-                    key={memo.name}
-                    memo={memo}
-                    serverUrl={config.serverUrl}
-                    tagColors={tagColors}
-                    menuOpen={openMenu === memo.name}
-                    onMenuOpenChange={(open) => setOpenMenu(open ? memo.name : null)}
-                    onChanged={replace}
-                    onDeleted={remove}
-                    onEdit={(m) => { setOpenMenu(null); setEditing(m); }}
-                    onSelectTag={selectTag}
-                  />
-                ))}
+                {pinnedMemos.length > 0 && (
+                  <>
+                    <div className="feed-section-label pinned-label">
+                      <PinIcon size={11} filled />
+                      <span>置顶</span>
+                    </div>
+                    {pinnedMemos.map(renderMemo)}
+                  </>
+                )}
+                {pinnedMemos.length > 0 && restMemos.length > 0 && (
+                  <div className="feed-section-label">其他</div>
+                )}
+                {restMemos.map(renderMemo)}
 
                 {nextPageToken && nav !== 'today' && nav !== 'archive' && (
                   <button
@@ -497,6 +532,10 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   async function runPin(memo: Memo): Promise<void> {
     const result = await window.api.memos.update(memo.name, { pinned: !memo.pinned })
-    if (result.success && result.data) setEditing(result.data)
+    if (result.success && result.data) {
+      setEditing(result.data)
+      // Keep the feed in sync so the note moves between the 置顶 and 其他 groups on return.
+      replace(result.data)
+    }
   }
 }
