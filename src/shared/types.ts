@@ -66,6 +66,10 @@ export interface AppConfig {
   username: string
   /** Electron accelerator for the quick-capture window. */
   quickHotkey: string
+  /** Electron accelerator that shows / hides the main window. */
+  mainHotkey: string
+  /** true: 点关闭按钮时隐藏到托盘；false: 直接退出应用。 */
+  closeToTray: boolean
   launchAtLogin: boolean
   theme: ThemeId
   appearance: Appearance

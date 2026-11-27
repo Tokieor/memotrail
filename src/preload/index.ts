@@ -15,8 +15,30 @@ const api = {
       }
     }
   },
-  auth: {
-    signIn: (serverUrl: string, username: string, password: string) =>
+  /** 自绘标题栏的窗口按钮（Windows；macOS 仍用系统红绿灯）。 */
+  windowControls: {
+    minimize: () => ipcRenderer.invoke('window:controls', 'minimize'),
+    toggleMaximize: () => ipcRenderer.invoke('window:controls', 'toggle-maximize'),
+    close: () => ipcRenderer.invoke('window:controls', 'close'),
+    isMaximized: () => ipcRenderer.invoke('window:is-maximized') as Promise<boolean>,
+    /** 窗口被双击标题区、Win+↑ 或系统手势最大化时同步图标。 */
+    onMaximizedChange: (callback: (maximized: boolean) => void) => {
+      const listener = (_event: unknown, maximized: boolean): void => callback(maximized)
+      ipcRenderer.on('window:maximized', listener)
+      return () => {
+        ipcRenderer.removeListener('window:maximized', listener)
+      }
+    }
+  },
+  hotkeys: {
+    /** 试注册一次再注销，用来判断组合键是否合法 / 是否被占用。 */
+    check: (accelerator: string, slot: 'quick' | 'main') =>
+      ipcRenderer.invoke('hotkey:check', accelerator, slot) as Promise<'ok' | 'taken' | 'invalid' | 'duplicate'>,
+    /** 录制期间挂起自家快捷键，否则系统会先把按键吞掉、录不到。 */
+    suspend: () => ipcRenderer.invoke('hotkey:suspend'),
+    resume: () => ipcRenderer.invoke('hotkey:resume')
+  },
+  auth: {    signIn: (serverUrl: string, username: string, password: string) =>
       ipcRenderer.invoke('auth:signin', serverUrl, username, password),
     status: () => ipcRenderer.invoke('auth:status') as Promise<{ success: boolean; data?: User | null; error?: string }>,
     signOut: () => ipcRenderer.invoke('auth:signout')

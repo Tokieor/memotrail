@@ -1,9 +1,9 @@
-import { app, clipboard, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import * as memos from './memos/client'
 import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
 import { broadcast, getMainWindow, hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
-import { registerQuickHotkey } from './hotkeys'
+import { probeAccelerator, registerMainHotkey, registerQuickHotkey, resumeHotkeys, sameAccelerator, suspendHotkeys, type HotkeySlot } from './hotkeys'
 
 /** Only the app's own pages may talk to these handlers. */
 function trusted(event: Electron.IpcMainInvokeEvent): boolean {
@@ -24,6 +24,21 @@ function broadcastChange(): void {
 }
 
 export function registerIpc(): void {
+  // 自绘标题栏的三个按钮：操作的是发请求的那个窗口，不一定是主窗口（登录页也用它）。
+  ipcMain.handle('window:controls', (event, action: unknown) => {
+    if (!trusted(event)) return
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win || win.isDestroyed()) return
+    if (action === 'minimize') win.minimize()
+    else if (action === 'toggle-maximize') win.isMaximized() ? win.unmaximize() : win.maximize()
+    else if (action === 'close') win.close()
+  })
+  ipcMain.handle('window:is-maximized', (event) => {
+    if (!trusted(event)) return false
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return !!win && !win.isDestroyed() && win.isMaximized()
+  })
+
   // macOS often offers a screenshot only as a pasteboard image, with no file the renderer can see.
   handle('clipboard:read-image', async (): Promise<{ type: string; data: string } | null> => {
     for (const item of await clipboard.read()) {
@@ -39,11 +54,26 @@ export function registerIpc(): void {
   handle('config:set', (patch: Partial<AppConfig>) => {
     const previous = loadConfig()
     const next = saveConfig(patch)
-    if (patch.quickHotkey !== undefined && patch.quickHotkey !== previous.quickHotkey) {
-      if (!registerQuickHotkey(next.quickHotkey)) {
-        const reverted = saveConfig({ quickHotkey: previous.quickHotkey })
-        registerQuickHotkey(reverted.quickHotkey)
-        throw new Error(`快捷键 ${patch.quickHotkey} 被系统或其它应用占用，已恢复为 ${reverted.quickHotkey}`)
+
+    const changedQuick = patch.quickHotkey !== undefined && patch.quickHotkey !== previous.quickHotkey
+    const changedMain = patch.mainHotkey !== undefined && patch.mainHotkey !== previous.mainHotkey
+    if (changedQuick || changedMain) {
+      // 两个全局快捷键不能相同——后注册的那个必然失败。
+      if (sameAccelerator(next.quickHotkey, next.mainHotkey)) {
+        saveConfig({ quickHotkey: previous.quickHotkey, mainHotkey: previous.mainHotkey })
+        registerQuickHotkey(previous.quickHotkey)
+        registerMainHotkey(previous.mainHotkey)
+        throw new Error('快速记录与主窗口不能使用同一个快捷键')
+      }
+      if (changedQuick && !registerQuickHotkey(next.quickHotkey)) {
+        saveConfig({ quickHotkey: previous.quickHotkey })
+        registerQuickHotkey(previous.quickHotkey)
+        throw new Error(`快捷键 ${patch.quickHotkey} 被系统或其它应用占用，已恢复为 ${previous.quickHotkey}`)
+      }
+      if (changedMain && !registerMainHotkey(next.mainHotkey)) {
+        saveConfig({ mainHotkey: previous.mainHotkey })
+        registerMainHotkey(previous.mainHotkey)
+        throw new Error(`快捷键 ${patch.mainHotkey} 被系统或其它应用占用，已恢复为 ${previous.mainHotkey}`)
       }
     }
     if (patch.launchAtLogin !== undefined && process.platform !== 'linux') {
@@ -53,6 +83,10 @@ export function registerIpc(): void {
     return next
   })
 
+  handle('hotkey:check', (accelerator: string, slot: HotkeySlot) => probeAccelerator(accelerator, slot))
+  // 录制时挂起自家快捷键，录完立刻恢复（见 hotkeys.ts 里的说明）。
+  handle('hotkey:suspend', () => suspendHotkeys())
+  handle('hotkey:resume', () => resumeHotkeys())
   handle('auth:signin', async (serverUrl: string, username: string, password: string) => {
     const result = await memos.signIn(serverUrl, username, password)
     if (result.success) saveConfig({ serverUrl, username })

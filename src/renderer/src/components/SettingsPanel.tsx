@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { AppConfig, Appearance, SidebarCard, ThemeId } from '@shared/types'
 import { describeError } from '../lib/errors'
-import { formatAccelerator } from '../lib/accelerator'
+import { captureAccelerator, formatAccelerator } from '../lib/accelerator'
 import { applyTheme } from '../lib/theme'
 import { applyFontSize, fontSizeFromConfig, FONT_SIZE_OPTIONS } from '../lib/font-size'
 import { CheckIcon, ChevronIcon, EyeIcon, SyncIcon } from './Icons'
@@ -41,40 +42,140 @@ const SECTIONS: { key: SettingsSection; label: string }[] = [
   { key: 'about', label: '关于' }
 ]
 
-/** Turns a keydown into an Electron accelerator, ignoring bare modifiers. */
-export function toAccelerator(event: KeyboardEvent): string | null {
-  const key = event.key
-  if (['Meta', 'Control', 'Alt', 'Shift'].includes(key)) return null
-  const parts: string[] = []
-  if (event.metaKey) parts.push('Command')
-  if (event.ctrlKey) parts.push('Control')
-  if (event.altKey) parts.push('Alt')
-  if (event.shiftKey) parts.push('Shift')
-  if (parts.length === 0) return null
-  const named: Record<string, string> = { ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Escape: 'Esc' }
-  // Electron only accepts ASCII accelerator keys; a dead key such as `ˆ` would throw on register.
-  if (key.length === 1 && key.charCodeAt(0) > 0x7e) return null
-  parts.push(named[key] ?? (key.length === 1 ? key.toUpperCase() : key))
-  return parts.join('+')
+/**
+ * 一条快捷键设置：只读输入框展示当前组合，右侧「录制」「保存」两个按钮。
+ * 录制只负责把按键记下来并做可用性校验，真正注册要等点保存。
+ */
+interface HotkeyRowProps {
+  label: string
+  value: string
+  error: string
+  recording: boolean
+  dirty: boolean
+  onRecord: () => void
+  onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void
+  onCancel: () => void
+  onSave: () => void
+}
+
+function HotkeyRow({ label, value, error, recording, dirty, onRecord, onKeyDown, onCancel, onSave }: HotkeyRowProps): JSX.Element {
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (recording) input.current?.focus()
+  }, [recording])
+
+  return (
+    <div className="hotkey-field">
+      <label className="field-label">{label}</label>
+      <div className="hotkey-row">
+        <input
+          ref={input}
+          className={`field-input${recording ? ' recording' : ''}`}
+          value={recording ? '' : formatAccelerator(value)}
+          placeholder={recording ? '请按下组合键…' : '未设置'}
+          readOnly
+          onKeyDown={onKeyDown}
+          onBlur={onCancel}
+        />
+        <button type="button" className="secondary-btn" onClick={onRecord} disabled={recording}>录制</button>
+        {/* 有报错（不合法 / 被占用）时不允许保存，避免写进一个注册不上的组合键。 */}
+        <button type="button" className="primary-btn" onClick={onSave} disabled={!dirty || recording || !!error}>保存</button>
+      </div>
+      {error && <p className="hotkey-error">{error}</p>}
+    </div>
+  )
 }
 
 export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, onSynced }: Props): JSX.Element {
   const [section, setSection] = useState<SettingsSection>('connection')
-  const [hotkey, setHotkey] = useState(config.quickHotkey)
+  const [quickHotkey, setQuickHotkey] = useState(config.quickHotkey)
+  const [mainHotkey, setMainHotkey] = useState(config.mainHotkey)
+  const [quickError, setQuickError] = useState('')
+  const [mainError, setMainError] = useState('')
+  const [recording, setRecording] = useState<'quick' | 'main' | null>(null)
+  const [notice, setNotice] = useState('')
   const [launchAtLogin, setLaunchAtLogin] = useState(config.launchAtLogin)
+  const [closeToTray, setCloseToTray] = useState(config.closeToTray)
   const [showToken, setShowToken] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [wifiOnly, setWifiOnly] = useState(false)
   const [message, setMessage] = useState('')
   const [syncing, setSyncing] = useState(false)
 
-  async function save(): Promise<void> {
+  const setErrorOf = (slot: 'quick' | 'main', text: string): void => {
+    if (slot === 'quick') setQuickError(text)
+    else setMainError(text)
+  }
+
+  // 面板被卸载（切页 / 关窗口）时确保快捷键已恢复。
+  useEffect(() => () => { void window.api.hotkeys.resume() }, [])
+
+  function startRecording(slot: 'quick' | 'main'): void {
+    // 先挂起自家快捷键，否则按到「另一个功能当前占用的组合」会被系统吞掉、录不到。
+    void window.api.hotkeys.suspend()
+    setRecording(slot)
+    setErrorOf(slot, '')
+    setNotice('')
+  }
+
+  function cancelRecording(): void {
+    setRecording(null)
+    void window.api.hotkeys.resume()
+  }
+
+  /**
+   * 录制结束：先把组合键摆到输入框里，再让主进程试注册一次，判断是否合法 / 被占用。
+   * 校验不通过时保留按键、显示错误，保存按钮保持不可用。
+   */
+  async function captureFor(slot: 'quick' | 'main', accelerator: string): Promise<void> {
+    setRecording(null)
+    setNotice('')
+    void window.api.hotkeys.resume()
+    if (slot === 'quick') setQuickHotkey(accelerator)
+    else setMainHotkey(accelerator)
+
+    const result = await window.api.hotkeys.check(accelerator, slot)
+    setErrorOf(
+      slot,
+      result === 'duplicate'
+        ? '这个组合键已经用于另一个功能，请换一个'
+        : result === 'taken'
+          ? '这个组合键已被系统或其它应用占用，请换一个'
+          : result === 'invalid'
+            ? '系统不接受这个组合键，请换一个'
+            : ''
+    )
+  }
+
+  function handleRecordKey(slot: 'quick' | 'main', event: ReactKeyboardEvent<HTMLInputElement>): void {
+    event.preventDefault()
+    const native = event.nativeEvent
+    if (native.key === 'Escape') {
+      setRecording(null)
+      setErrorOf(slot, '')
+      void window.api.hotkeys.resume()
+      return
+    }
+    const captured = captureAccelerator(native, window.api.platform)
+    if (captured.error) {
+      // 只按了字母这种不合法组合：报错但继续录制，用户可以接着按下一个组合。
+      setErrorOf(slot, captured.error)
+      return
+    }
+    if (captured.accelerator) void captureFor(slot, captured.accelerator)
+  }
+
+  /** 点「保存」才真正写配置并注册到系统。 */
+  async function saveHotkey(slot: 'quick' | 'main'): Promise<void> {
+    setNotice('')
+    const value = slot === 'quick' ? quickHotkey : mainHotkey
     try {
-      const next = await window.api.config.set({ quickHotkey: hotkey })
+      const next = await window.api.config.set(slot === 'quick' ? { quickHotkey: value } : { mainHotkey: value })
       onConfigChange(next)
-      setMessage('已保存')
+      setErrorOf(slot, '')
+      setNotice(slot === 'quick' ? '快速记录快捷键已生效' : '主窗口快捷键已生效')
     } catch (err) {
-      setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
+      setErrorOf(slot, describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     }
   }
 
@@ -85,6 +186,18 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
       onConfigChange(updated)
     } catch (err) {
       setLaunchAtLogin(!next)
+      setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
+    }
+  }
+
+  async function toggleCloseToTray(next: boolean): Promise<void> {
+    setCloseToTray(next)
+    try {
+      const updated = await window.api.config.set({ closeToTray: next })
+      onConfigChange(updated)
+      setMessage('')
+    } catch (err) {
+      setCloseToTray(!next)
       setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
     }
   }
@@ -132,7 +245,11 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
       <div className="settings-content">
         <h2 className="settings-section-title">{SECTIONS.find((s) => s.key === section)?.label}</h2>
         <p className="settings-section-sub">
-          {section === 'connection' ? '管理 Memos 服务连接与本地同步行为' : '调整客户端偏好设置'}
+          {section === 'connection'
+            ? '管理 Memos 服务连接与本地同步行为'
+            : section === 'shortcut'
+              ? '点「录制」按下组合键，校验通过后点「保存」才会生效'
+              : '调整客户端偏好设置'}
         </p>
 
         {section === 'connection' && (
@@ -145,16 +262,18 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
 
               <div className="field-group">
                 <label className="field-label">服务器地址</label>
-                <div className="field-input"><span>{config.serverUrl || '未设置'}</span></div>
+                <div className="field-input"><span className="field-text">{config.serverUrl || '未设置'}</span></div>
               </div>
               <div className="field-group">
                 <label className="field-label">账号</label>
-                <div className="field-input"><span>{config.username || '—'}</span></div>
+                <div className="field-input"><span className="field-text">{config.username || '—'}</span></div>
               </div>
               <div className="field-group">
                 <label className="field-label">访问令牌</label>
                 <div className="field-input">
-                  <span style={{ letterSpacing: 2, flex: 1 }}>{showToken ? '已登录（令牌由主进程安全保管）' : '••••••••••••••••••••'}</span>
+                  <span className={`field-text${showToken ? '' : ' masked'}`}>
+                    {showToken ? '已登录（令牌由主进程安全保管）' : '••••••••••••••••••••'}
+                  </span>
                   <button className="meta-btn" onClick={() => setShowToken((v) => !v)} title={showToken ? '隐藏' : '显示'}>
                     <EyeIcon size={16} />
                   </button>
@@ -208,25 +327,29 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
         {section === 'shortcut' && (
           <div className="settings-card">
             <h3 className="settings-card-title">全局快捷键</h3>
-            <div className="field-group">
-              <label className="field-label">快速记录（点一下输入框后直接按组合键）</label>
-              <input
-                className="field-input"
-                value={formatAccelerator(hotkey)}
-                readOnly
-                onKeyDown={(e) => {
-                  e.preventDefault()
-                  const accelerator = toAccelerator(e.nativeEvent)
-                  if (accelerator) setHotkey(accelerator)
-                }}
-                placeholder="按下组合键…"
-              />
-            </div>
-            {message && <p style={{ fontSize: 12, color: message === '已保存' ? 'var(--accent)' : 'var(--danger)', marginTop: 8 }}>{message}</p>}
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-              <button className="primary-btn" onClick={() => void save()}>保存</button>
-              <button className="secondary-btn" onClick={onSignOut}>退出登录</button>
-            </div>
+            <HotkeyRow
+              label="打开 / 隐藏主窗口（窗口在前台时按下会收起）"
+              value={mainHotkey}
+              error={mainError}
+              recording={recording === 'main'}
+              dirty={mainHotkey !== config.mainHotkey}
+              onRecord={() => startRecording('main')}
+              onKeyDown={(e) => handleRecordKey('main', e)}
+              onCancel={cancelRecording}
+              onSave={() => void saveHotkey('main')}
+            />
+            <HotkeyRow
+              label="快速记录（点一下录制按钮后直接按组合键）"
+              value={quickHotkey}
+              error={quickError}
+              recording={recording === 'quick'}
+              dirty={quickHotkey !== config.quickHotkey}
+              onRecord={() => startRecording('quick')}
+              onKeyDown={(e) => handleRecordKey('quick', e)}
+              onCancel={cancelRecording}
+              onSave={() => void saveHotkey('quick')}
+            />
+            {notice && <p className="hotkey-ok">{notice}</p>}
           </div>
         )}
 
@@ -238,7 +361,24 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                 <span className="pref-title">登录时启动</span>
                 <span className="pref-sub">开机后自动在后台运行</span>
               </div>
-              <input type="checkbox" checked={launchAtLogin} onChange={(e) => void toggleLaunchAtLogin(e.target.checked)} />
+              <button
+                className={`toggle ${launchAtLogin ? 'on' : 'off'}`}
+                onClick={() => void toggleLaunchAtLogin(!launchAtLogin)}
+                aria-label="登录时启动"
+              />
+            </div>
+            <div className="pref-row">
+              <div className="pref-meta">
+                <span className="pref-title">关闭窗口时隐藏到托盘</span>
+                <span className="pref-sub">
+                  {closeToTray ? '点关闭按钮后应用继续在托盘运行，用托盘或快捷键可再打开' : '点关闭按钮即退出应用'}
+                </span>
+              </div>
+              <button
+                className={`toggle ${closeToTray ? 'on' : 'off'}`}
+                onClick={() => void toggleCloseToTray(!closeToTray)}
+                aria-label="关闭窗口时隐藏到托盘"
+              />
             </div>
             {message && section === 'general' && (
               <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{message}</p>

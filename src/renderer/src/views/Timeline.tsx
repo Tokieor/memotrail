@@ -83,6 +83,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const feedRef = useRef<HTMLDivElement>(null)
+  /** 当前这批 memos 属于哪个导航。切页后新请求没回来之前它还是旧值，
+   *  用来挡住「拿归档数据去算标签栏」那一下闪烁。 */
+  const loadedNav = useRef<NavKey | null>(null)
   const [showToTop, setShowToTop] = useState(false)
 
   useEffect(() => {
@@ -112,6 +115,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       })
       if (result.success && result.data) {
         const page = result.data.memos ?? []
+        // 先认领这批数据的归属，再交给 React：feedMemos 的 effect 靠它判断数据是否已经换页。
+        loadedNav.current = nav
         setMemos((current) => (reset ? page : [...current, ...page]))
         setNextPageToken(result.data.nextPageToken || undefined)
         setSyncState('synced')
@@ -195,7 +200,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
    */
   const [feedMemos, setFeedMemos] = useState<Memo[]>([])
   useEffect(() => {
-    if (nav !== 'archive') setFeedMemos(liveMemos)
+    if (nav === 'archive') return
+    // 从归档切回「全部笔记」的瞬间，memos 里还是归档那一批（新请求在路上），
+    // 由它过滤出的 liveMemos 是空的 —— 直接采纳会把标签栏清空一帧再填回来，就是那下闪烁。
+    if (loadedNav.current !== nav) return
+    setFeedMemos(liveMemos)
   }, [liveMemos, nav])
 
   // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
