@@ -70,12 +70,35 @@ function wrapInlineTags(root: HTMLElement, tagColors?: Record<string, string>): 
   }
 }
 
+/**
+ * Attachments live behind the private scheme so the main process can attach the Bearer token.
+ * Memos writes `/file/attachments/...`, but a hand-written memo may leave a bare `attachments/...`
+ * which would otherwise resolve against the renderer's own directory and fail to load.
+ */
+function prepareImages(root: HTMLElement): void {
+  for (const img of Array.from(root.querySelectorAll('img'))) {
+    const src = img.getAttribute('src') ?? ''
+    if (src.startsWith('/file/')) img.setAttribute('src', `memotrail://local${src}`)
+    else if (src.startsWith('attachments/')) img.setAttribute('src', `memotrail://local/file/${src}`)
+  }
+
+  // Paragraphs holding nothing but images become one row of square thumbnails. The text check
+  // matters: `:has(> img:only-child)` also matches "text + image" paragraphs (text nodes are not
+  // counted as children), which used to collapse the text line onto the image.
+  for (const paragraph of Array.from(root.querySelectorAll('p'))) {
+    if (!paragraph.querySelector('img')) continue
+    if (paragraph.textContent?.trim()) continue
+    paragraph.classList.add('md-img-row')
+  }
+}
+
 export function renderMarkdown(content: string, tagColors?: Record<string, string>): string {
   const html = marked.parse(content, { async: false }) as string
   const clean = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
   const doc = new DOMParser().parseFromString(clean, 'text/html')
   wrapInlineTags(doc.body, tagColors)
-  return doc.body.innerHTML.replace(/(<img[^>]+src=")\/file\//g, '$1memotrail://local/file/')
+  prepareImages(doc.body)
+  return doc.body.innerHTML
 }
 
 /**
@@ -83,7 +106,9 @@ export function renderMarkdown(content: string, tagColors?: Record<string, strin
  * attachment strip). Server-relative attachments need the private scheme to carry the token.
  */
 export function attachmentUrl(url: string): string {
-  return url.startsWith('/file/') ? `memotrail://local${url}` : url
+  if (url.startsWith('/file/')) return `memotrail://local${url}`
+  if (url.startsWith('attachments/')) return `memotrail://local/file/${url}`
+  return url
 }
 
 /** "刚刚 / 5 分钟前 / 昨天 14:20 / 3 月 2 日" — compact, good enough for a timeline. */

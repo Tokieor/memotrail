@@ -120,7 +120,43 @@ export function MemoCard({
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const [error, setError] = useState('')
   const menuButton = useRef<HTMLButtonElement>(null)
+  const body = useRef<HTMLDivElement>(null)
   const html = useMemo(() => renderMarkdown(memo.content, tagColors), [memo.content, tagColors])
+
+  // An attachment can disappear (deleted on the server, or an upload that was never bound to the
+  // memo). Replace the browser's broken-image glyph with a quiet placeholder of the same size.
+  useEffect(() => {
+    const root = body.current
+    if (!root) return
+    const images = Array.from(root.querySelectorAll('img'))
+    const watched: HTMLImageElement[] = []
+
+    function replaceWithPlaceholder(image: HTMLImageElement): void {
+      if (image.dataset['broken']) return
+      image.dataset['broken'] = '1'
+      const placeholder = document.createElement('span')
+      placeholder.className = 'img-broken'
+      placeholder.textContent = '图片不可用'
+      image.replaceWith(placeholder)
+    }
+
+    function onError(event: Event): void {
+      replaceWithPlaceholder(event.currentTarget as HTMLImageElement)
+    }
+
+    for (const image of images) {
+      // A cached failure is already "complete" with no intrinsic size, before the listener attaches.
+      if (image.complete && image.naturalWidth === 0) {
+        replaceWithPlaceholder(image)
+        continue
+      }
+      image.addEventListener('error', onError)
+      watched.push(image)
+    }
+    return () => {
+      for (const image of watched) image.removeEventListener('error', onError)
+    }
+  }, [html])
 
   async function run(action: () => Promise<{ success: boolean; data?: Memo; error?: string }>): Promise<void> {
     setBusy(true)
@@ -200,7 +236,7 @@ export function MemoCard({
         />
       )}
 
-      <div className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
+      <div ref={body} className="markdown note-body break-words" onClick={openLink} dangerouslySetInnerHTML={{ __html: html }} />
 
       <div className="meta-row">
         <span title={memo.createTime}>{relativeTime(memo.createTime)}</span>
