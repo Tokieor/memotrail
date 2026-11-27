@@ -9,10 +9,12 @@ function base({ size = 18, ...props }: IconProps): SVGProps<SVGSVGElement> {
 export function LogoMark({ size = 28 }: { size?: number }): JSX.Element {
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="4" y="3" width="20" height="22" rx="5" fill="var(--accent)" />
-      <path d="M16 3v5h8" stroke="var(--paper)" strokeWidth="1.5" fill="none" />
-      <rect x="8" y="12" width="10" height="2" rx="1" fill="var(--on-accent)" />
-      <rect x="8" y="17" width="7" height="2" rx="1" fill="var(--on-accent)" opacity="0.65" />
+      <rect x="1" y="1" width="26" height="26" rx="6" fill="#f7f0e6" />
+      <rect x="5.4" y="5.6" width="14.4" height="11.6" rx="2.6" fill="#1f2022" transform="rotate(-9 12.6 11.4)" />
+      <rect x="8.2" y="8.6" width="14.4" height="11.6" rx="2.6" fill="#2b2c30" transform="rotate(7 15.4 14.4)" />
+      <rect x="6.4" y="12" width="15.2" height="10.4" rx="2.6" fill="#1f2022" transform="rotate(-4 14 17.2)" />
+      <path d="M8.8 16.4c1.6-1.9 3.1-1.9 4.7 0s3.2 1.9 4.8 0" stroke="#f7f0e6" strokeWidth="1.7" strokeLinecap="round" fill="none" />
+      <circle cx="22" cy="9" r="2.3" fill="#1f2022" />
     </svg>
   )
 }

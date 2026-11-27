@@ -1,8 +1,15 @@
-import { BrowserWindow, nativeTheme, shell } from 'electron'
+import { BrowserWindow, app, nativeTheme, shell } from 'electron'
 import { join } from 'node:path'
 import { loadConfig, loadWindowState, saveWindowState } from './config'
 
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
+
+/** 与主进程托盘共用同一套资源路径规则，保证开发态任务栏也用新图标而非 Electron 默认。 */
+function iconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'resources', 'icon.png')
+    : join(app.getAppPath(), 'resources', 'icon.png')
+}
 
 /** 深色模式下启动瞬间不该闪一条白底，窗口底色跟着配置走（对应 CSS 的 --paper）。 */
 function initialBackgroundColor(): string {
@@ -42,6 +49,7 @@ export function createMainWindow(): BrowserWindow {
     // macOS 用 hiddenInset 留出红绿灯；Windows 干脆去掉整个原生边框，标题区完全由界面自绘
     // ——系统绘制的按钮没有悬浮反馈，也涂不出主题色。Linux 保持系统标题栏。
     ...(isWindows ? { frame: false } : { titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default' }),
+    icon: iconPath(),
     backgroundColor: initialBackgroundColor(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

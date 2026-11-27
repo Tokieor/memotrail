@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - 连接轨迹</title>
+  <rect width="256" height="256" rx="58" fill="#5c7f6f" />
+  <path d="M62 190C86 190 86 138 122 132S158 148 180 106s22-38 30-38" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.55" />
+  <circle cx="62" cy="190" r="18" fill="#ffffff" />
+  <circle cx="122" cy="132" r="15" fill="#ffffff" />
+  <circle cx="210" cy="70" r="12" fill="#ffffff" />
+</svg>

@@ -1,97 +1,69 @@
 #!/usr/bin/env python3
-"""Generate the app icon (1024²) and the macOS tray template (44²) without any image library."""
-import struct
-import zlib
-from math import hypot
+"""从候选稿 11（米白底黑点叠层卡片）生成应用图标与两种托盘图标。
+
+依赖 Pillow。源图在 resources/icon-candidates/11-stacked-cards-cream-black.png，
+即用户手绘叠层卡片稿去橙点、改黑点后的 959x921 位图。
+"""
+from pathlib import Path
+import math
+
+from PIL import Image, ImageDraw
+
+ROOT = Path(__file__).resolve().parent.parent
+RES = ROOT / 'resources'
+SRC = RES / 'icon-candidates' / '11-stacked-cards-cream-black.png'
+
+CREAM = (247, 240, 230, 255)
+DARK = (31, 32, 34, 255)
 
 
-def write_png(path, width, height, pixels):
-    raw = b''.join(b'\x00' + bytes(pixels[y * width * 4:(y + 1) * width * 4]) for y in range(height))
-
-    def chunk(tag, data):
-        return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xFFFFFFFF)
-
-    png = b'\x89PNG\r\n\x1a\n'
-    png += chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0))
-    png += chunk(b'IDAT', zlib.compress(raw, 9))
-    png += chunk(b'IEND', b'')
-    with open(path, 'wb') as fh:
-        fh.write(png)
+def rounded_mask(size: int, radius_ratio: float = 0.12, ss: int = 4) -> Image.Image:
+    """抗锯齿圆角矩形遮罩。"""
+    s = size * ss
+    mask = Image.new('L', (s, s), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, s - 1, s - 1), radius=int(radius_ratio * s), fill=255)
+    return mask.resize((size, size), Image.LANCZOS)
 
 
-def coverage(distance, radius, feather=1.0):
-    """Anti-aliased 0..1 coverage for a filled disc edge."""
-    return max(0.0, min(1.0, (radius - distance) / feather + 0.5))
+def app_icon() -> None:
+    """1024² 应用图标：裁米白方块 → 拉伸 → 圆角透明。"""
+    im = Image.open(SRC).convert('RGBA').crop((55, 33, 909, 878))
+    im = im.resize((1024, 1024), Image.LANCZOS)
+    im.putalpha(rounded_mask(1024))
+    im.save(RES / 'icon.png')
 
 
-def rounded_rect_alpha(x, y, size, radius, feather=1.0):
-    cx = min(max(x, radius), size - radius)
-    cy = min(max(y, radius), size - radius)
-    d = hypot(x - cx, y - cy)
-    return max(0.0, min(1.0, (radius - d) / feather + 0.5))
+def tray_windows() -> None:
+    """32² Windows 托盘：简化版（米白底 + 单张黑卡片 + 白波浪 + 黑点）。"""
+    s = 128
+    img = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((4, 4, s - 4, s - 4), radius=26, fill=CREAM)
+    card = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    ImageDraw.Draw(card).rounded_rectangle((22, 34, 100, 98), radius=12, fill=DARK)
+    img.alpha_composite(card.rotate(-6, resample=Image.BICUBIC))
+    d = ImageDraw.Draw(img)
+    pts = [(26 + i * (76 / 60), 72 - 8 * math.sin(i / 60.0 * 2 * math.pi)) for i in range(61)]
+    d.line(pts, fill=CREAM, width=7, joint='curve')
+    for x, y in pts[::6]:
+        d.ellipse((x - 3.5, y - 3.5, x + 3.5, y + 3.5), fill=CREAM)
+    d.ellipse((100, 20, 120, 40), fill=DARK)
+    img.resize((32, 32), Image.LANCZOS).save(RES / 'trayWindows.png')
 
 
-def app_icon(path, size=1024):
-    radius = size * 0.22
-    dots = [(0.33, 0.67, 0.085), (0.50, 0.50, 0.062), (0.67, 0.33, 0.040)]
-    px = bytearray(size * size * 4)
-    for y in range(size):
-        t = y / (size - 1)
-        bg = (int(31 + 40 * t), int(111 + 20 * t), int(235 + 10 * t))
-        for x in range(size):
-            a = rounded_rect_alpha(x + 0.5, y + 0.5, size, radius)
-            if a <= 0:
-                continue
-            r, g, b = bg
-            for dx, dy, dr in dots:
-                c = coverage(hypot(x + 0.5 - dx * size, y + 0.5 - dy * size), dr * size)
-                if c > 0:
-                    r = int(r + (255 - r) * c)
-                    g = int(g + (255 - g) * c)
-                    b = int(b + (255 - b) * c)
-            i = (y * size + x) * 4
-            px[i:i + 4] = bytes((r, g, b, int(a * 255)))
-    write_png(path, size, size, px)
-
-
-def tray_template(path, size=44):
-    dots = [(0.32, 0.68, 0.105), (0.50, 0.50, 0.078), (0.68, 0.32, 0.052)]
-    px = bytearray(size * size * 4)
-    for y in range(size):
-        for x in range(size):
-            alpha = 0.0
-            for dx, dy, dr in dots:
-                alpha = max(alpha, coverage(hypot(x + 0.5 - dx * size, y + 0.5 - dy * size), dr * size))
-            i = (y * size + x) * 4
-            px[i:i + 4] = bytes((0, 0, 0, int(alpha * 255)))
-    write_png(path, size, size, px)
-
-
-def tray_windows(path, size=32):
-    """Windows 托盘图标：蓝色圆底 + 白点，浅色/深色任务栏都清晰（macOS 仍用模板图）。"""
-    dots = [(0.32, 0.68, 0.105), (0.50, 0.50, 0.078), (0.68, 0.32, 0.052)]
-    px = bytearray(size * size * 4)
-    for y in range(size):
-        t = y / (size - 1)
-        bg = (int(31 + 40 * t), int(111 + 20 * t), int(235 + 10 * t))
-        for x in range(size):
-            a = coverage(hypot(x + 0.5 - size / 2, y + 0.5 - size / 2), size * 0.48, 1.0)
-            if a <= 0:
-                continue
-            r, g, b = bg
-            for dx, dy, dr in dots:
-                c = coverage(hypot(x + 0.5 - dx * size, y + 0.5 - dy * size), dr * size)
-                if c > 0:
-                    r = int(r + (255 - r) * c)
-                    g = int(g + (255 - g) * c)
-                    b = int(b + (255 - b) * c)
-            i = (y * size + x) * 4
-            px[i:i + 4] = bytes((r, g, b, int(a * 255)))
-    write_png(path, size, size, px)
+def tray_template() -> None:
+    """44² macOS 托盘模板：深色图形剪影，纯黑 + alpha，系统自动反色。"""
+    import numpy as np
+    im = Image.open(SRC).convert('RGB').crop((55, 33, 909, 878))
+    small = np.asarray(im.resize((44, 44), Image.LANCZOS)).astype(float)
+    alpha = np.clip((180.0 - small.mean(axis=2)) / 90.0, 0.0, 1.0)
+    out = np.zeros((44, 44, 4), dtype=np.uint8)
+    out[:, :, 3] = (alpha * 255).astype(np.uint8)
+    Image.fromarray(out, 'RGBA').save(RES / 'trayTemplate.png')
 
 
 if __name__ == '__main__':
-    app_icon('resources/icon.png')
-    tray_template('resources/trayTemplate.png')
-    tray_windows('resources/trayWindows.png')
+    app_icon()
+    tray_windows()
+    tray_template()
     print('icons written')

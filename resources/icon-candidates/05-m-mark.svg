@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - M 字轨迹</title>
+  <rect width="256" height="256" rx="58" fill="#5c7f6f" />
+  <path d="M56 182V80l72 62 72-62v102" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="200" cy="80" r="10" fill="#a9c6b6" />
+</svg>

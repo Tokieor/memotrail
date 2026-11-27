@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - 手绘稿优化版</title>
+  <desc>保留 M 形轨迹意象，统一笔画与峰谷比例，两点收尾更协调。</desc>
+  <rect x="18" y="18" width="220" height="220" rx="58" fill="#1b1c21" />
+  <path d="M56 175 L56 126 L93 101 L125 133 L160 88 L190 143"
+        fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="208" cy="131" r="10" fill="#ffffff" />
+  <circle cx="202" cy="152" r="7" fill="#ffffff" />
+</svg>

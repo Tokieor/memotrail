@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - 手绘稿精修版</title>
+  <desc>严格按手绘坐标矢量化：深色圆角方块，白色 M 形轨迹线，末端两个圆点。</desc>
+  <rect x="20" y="20" width="216" height="216" rx="52" fill="#1b1c21" />
+  <path d="M57 175 L57 126 L92 101 L121 130 L154 89 L185 148"
+        fill="none" stroke="#ffffff" stroke-width="17" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="201" cy="135" r="9.5" fill="#ffffff" />
+  <circle cx="196" cy="152" r="6.5" fill="#ffffff" />
+</svg>

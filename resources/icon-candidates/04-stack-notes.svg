@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - 叠放便签</title>
+  <rect width="256" height="256" rx="58" fill="#5c7f6f" />
+  <rect x="58" y="76" width="126" height="112" rx="12" fill="#a9c6b6" />
+  <rect x="76" y="58" width="126" height="112" rx="12" fill="#ffffff" />
+  <path d="M172 58v22h30" fill="none" stroke="#e2ece5" stroke-width="5" stroke-linejoin="round" />
+  <rect x="94" y="104" width="70" height="8" rx="4" fill="#8fae9d" />
+  <rect x="94" y="126" width="48" height="8" rx="4" fill="#b3c8bb" />
+  <circle cx="200" cy="196" r="8" fill="#ffffff" />
+  <circle cx="220" cy="212" r="5" fill="#ffffff" opacity="0.8" />
+</svg>

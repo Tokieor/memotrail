@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img">
+  <title>MemoTrail - 三点轨迹（主题绿）</title>
+  <rect width="256" height="256" rx="58" fill="#5c7f6f" />
+  <circle cx="70" cy="178" r="29" fill="#ffffff" />
+  <circle cx="128" cy="128" r="24" fill="#ffffff" />
+  <circle cx="187" cy="76" r="17" fill="#ffffff" />
+</svg>
