@@ -1,5 +1,5 @@
-import { app, safeStorage } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { app } from 'electron'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { AppConfig, TagColorKey, TagMetaEntry, TagMetaMap } from '../shared/types'
 
@@ -120,7 +120,13 @@ function read(): StoredConfig {
 function write(next: StoredConfig): void {
   const file = configPath()
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, JSON.stringify(next, null, 2), 'utf-8')
+  writeFileSync(file, JSON.stringify(next, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  // writeFileSync only applies `mode` when it creates the file; keep hand-made files private too.
+  try {
+    chmodSync(file, 0o600)
+  } catch {
+    /* best effort — a filesystem without POSIX modes should not break saving */
+  }
   cached = next
 }
 
@@ -138,11 +144,22 @@ export function saveConfig(patch: Partial<AppConfig>): AppConfig {
   return loadConfig()
 }
 
+/**
+ * The refresh token is a rotating cookie the server hands back after sign-in.
+ *
+ * It used to go through `safeStorage`, but on macOS that keeps its key in the login keychain with an
+ * ACL bound to the code signature: an unsigned or ad-hoc signed build looks like a *different* app
+ * to the keychain, so macOS asked for the keychain password on every launch — and because the request
+ * is synchronous, the main process stalled before the window could even be shown.
+ *
+ * We therefore keep it in config.json (mode 0600, same trust boundary as a browser's cookie jar)
+ * instead of asking the OS for a secret on startup.
+ */
 export function loadRefreshToken(): string | null {
   const stored = read().refreshToken
   if (!stored) return null
   try {
-    return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+    return Buffer.from(stored, 'base64').toString('utf-8') || null
   } catch {
     return null
   }
@@ -151,12 +168,7 @@ export function loadRefreshToken(): string | null {
 export function saveRefreshToken(token: string | null): void {
   const next: StoredConfig = { ...read() }
   if (!token) delete next.refreshToken
-  else if (safeStorage.isEncryptionAvailable()) {
-    next.refreshToken = safeStorage.encryptString(token).toString('base64')
-  } else {
-    // Linux without a keyring: keep it in memory only rather than writing plaintext.
-    delete next.refreshToken
-  }
+  else next.refreshToken = Buffer.from(token, 'utf-8').toString('base64')
   write(next)
 }
 

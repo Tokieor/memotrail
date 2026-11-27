@@ -51,6 +51,8 @@ export function toAccelerator(event: KeyboardEvent): string | null {
   if (event.shiftKey) parts.push('Shift')
   if (parts.length === 0) return null
   const named: Record<string, string> = { ' ': 'Space', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', Escape: 'Esc' }
+  // Electron only accepts ASCII accelerator keys; a dead key such as `ˆ` would throw on register.
+  if (key.length === 1 && key.charCodeAt(0) > 0x7e) return null
   parts.push(named[key] ?? (key.length === 1 ? key.toUpperCase() : key))
   return parts.join('+')
 }

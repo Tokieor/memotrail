@@ -1,5 +1,5 @@
 import { app, Menu } from 'electron'
-import { clearLegacyArchived, loadConfig, loadRefreshToken, readLegacyArchived, saveRefreshToken } from './config'
+import { clearLegacyArchived, loadConfig, loadRefreshToken, readLegacyArchived, saveConfig, saveRefreshToken } from './config'
 import { registerQuickHotkey, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
@@ -8,6 +8,8 @@ import { createTray } from './tray'
 import { createMainWindow, showMainWindow, showQuickWindow } from './windows'
 
 registerFileScheme()
+
+const DEFAULT_QUICK_HOTKEY = 'CommandOrControl+Shift+M'
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -63,8 +65,14 @@ if (!app.requestSingleInstanceLock()) {
       quit: () => app.quit()
     })
 
+    // A shortcut saved by an older build (or a keyboard layout) may no longer be registerable —
+    // fall back to the default instead of leaving the app without a global shortcut.
     if (!registerQuickHotkey(config.quickHotkey)) {
-      console.warn(`[memotrail] the shortcut ${config.quickHotkey} is taken; change it in Settings`)
+      console.warn(`[memotrail] the shortcut ${config.quickHotkey} is taken or invalid`)
+      if (config.quickHotkey !== DEFAULT_QUICK_HOTKEY && registerQuickHotkey(DEFAULT_QUICK_HOTKEY)) {
+        console.warn(`[memotrail] fell back to ${DEFAULT_QUICK_HOTKEY}`)
+        saveConfig({ quickHotkey: DEFAULT_QUICK_HOTKEY })
+      }
     }
 
     app.on('activate', () => showMainWindow())
