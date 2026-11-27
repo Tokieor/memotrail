@@ -405,11 +405,6 @@ button {
 .ghost-btn.on { color: var(--accent); }
 
 /* ---------- Feed & note cards ---------- */
-/* The composer is pinned above the list: it lives in its own block, the list scrolls under it. */
-.feed-head {
-  flex: 0 0 auto;
-  padding: max(var(--feed-top-min), calc(var(--sidebar-inset) + var(--brand-h) + var(--sidebar-gap) - var(--topbar-h))) 24px 0;
-}
 .feed-scroll {
   flex: 1; overflow-y: auto;
   /* Top padding is derived so the first card lines up with the sidebar card. */
@@ -418,9 +413,6 @@ button {
   scrollbar-width: none;
 }
 .feed-scroll::-webkit-scrollbar { width: 0; height: 0; }
-/* Used when the composer already supplies the top spacing. */
-.feed-scroll.flush { padding-top: 0; }
-
 /* Floating "back to top" pill, bottom-right of the content column. */
 .to-top {
   position: absolute; right: 26px; bottom: 22px; z-index: 20;

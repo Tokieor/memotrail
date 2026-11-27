@@ -539,8 +539,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               </div>
             </header>
 
-            <div className="feed-head">
-              <div className="feed-inner">
+            <div className="feed-scroll" ref={feedRef} onScroll={onFeedScroll}>
+              <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
                 <Composer
                   focusSignal={composerFocus}
                   tagSuggestions={tagStats.map((stat) => stat.name)}
@@ -549,14 +549,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                     setMemos((current) => [memo, ...current])
                     // Writing from 归档 files the new note straight into the archive.
                     if (nav === 'archive') void setMemoState(memo, 'ARCHIVED')
-                    feedRef.current?.scrollTo({ top: 0 })
                   }}
                 />
-              </div>
-            </div>
-
-            <div className="feed-scroll flush" ref={feedRef} onScroll={onFeedScroll}>
-              <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
 
                 {/* With pins in play the two groups carry their own labels; otherwise keep «最近». */}
                 {nav !== 'archive' && pinnedMemos.length === 0 && restMemos.length > 0 && (

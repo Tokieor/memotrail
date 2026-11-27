@@ -1100,6 +1100,74 @@ export function Composer({
     setUploading(false)
   }
 
+  /**
+   * Native paste into a contenteditable inherits whatever inline formatting the caret sits in
+   * (Chrome copies the colour of a `#tag` span onto the pasted text), and the result comes back
+   * from turndown as duplicated, font-wrapped blocks. Take the clipboard ourselves instead:
+   * images go to the uploader, everything else is inserted as plain text with one <br> per line
+   * break — turndown maps <br> back to "\n" and marked runs with breaks:true, so it round-trips.
+   */
+  /** Last resort for image pastes: pull the picture out of the OS pasteboard ourselves. */
+  async function pasteClipboardImage(): Promise<void> {
+    const image = await window.api.clipboard.readImage()
+    if (!image) return
+    const bytes = Uint8Array.from(atob(image.data), (char) => char.charCodeAt(0))
+    const extension = image.type.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png'
+    await upload(new File([bytes], `pasted-image.${extension}`, { type: image.type }))
+  }
+
+  function pastePlainText(event: React.ClipboardEvent<HTMLDivElement>): void {
+    const surface = previewRef.current
+    const data = event.clipboardData
+    if (!surface || !data) return
+
+    const fromItems = Array.from(data.items)
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null)
+    const files = fromItems.length > 0 ? fromItems : Array.from(data.files)
+    if (files.length > 0) {
+      event.preventDefault()
+      for (const file of files) void upload(file)
+      return
+    }
+
+    const text = data.getData('text/plain')
+    if (!text) {
+      // Screenshots on macOS can arrive as a bare pasteboard image with no file attached.
+      event.preventDefault()
+      void pasteClipboardImage()
+      return
+    }
+    event.preventDefault()
+
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+    let range = selection.getRangeAt(0)
+    if (!surface.contains(range.commonAncestorContainer)) return
+
+    // A caret parked inside a rendered tag would swallow the pasted text into the tag.
+    const anchor = range.startContainer
+    const holder = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as Element) : anchor.parentElement
+    const tag = holder?.closest('.md-tag')
+    if (tag && surface.contains(tag) && placeCaretAfterPlain(tag)) {
+      const moved = window.getSelection()
+      if (!moved || moved.rangeCount === 0) return
+      range = moved.getRangeAt(0)
+    }
+
+    range.deleteContents()
+    const fragment = document.createDocumentFragment()
+    text.replace(/\r\n?/g, '\n').split('\n').forEach((line, index) => {
+      if (index > 0) fragment.append(document.createElement('br'))
+      if (line) fragment.append(document.createTextNode(line))
+    })
+    const last = fragment.lastChild
+    range.insertNode(fragment)
+    if (last) placeCaretAfterPlain(last)
+    onPreviewInput()
+  }
+
   async function submit(): Promise<void> {
     // Anything still wrapped in raw markers is finished now — render it before saving.
     const surface = previewRef.current
@@ -1153,12 +1221,7 @@ export function Composer({
               }
               if (e.key === 'Escape' && onCancel) onCancel()
             }}
-            onPaste={(e) => {
-              const files = Array.from(e.clipboardData.files)
-              if (files.length === 0) return
-              e.preventDefault()
-              for (const file of files) void upload(file)
-            }}
+            onPaste={pastePlainText}
             onDrop={(e) => {
               const files = Array.from(e.dataTransfer.files)
               if (files.length === 0) return

@@ -44,6 +44,10 @@ const api = {
         error?: string
       }>
   },
+  clipboard: {
+    /** Falls back to the OS pasteboard when the renderer sees no file for a pasted image. */
+    readImage: (): Promise<{ type: string; data: string } | null> => ipcRenderer.invoke('clipboard:read-image')
+  },
   quick: {
     capture: (payload: QuickCapturePayload) =>
       ipcRenderer.invoke('quick:capture', payload) as Promise<{ success: boolean; data?: Memo; error?: string }>,

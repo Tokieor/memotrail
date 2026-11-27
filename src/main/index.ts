@@ -11,11 +11,51 @@ registerFileScheme()
 
 const DEFAULT_QUICK_HOTKEY = 'CommandOrControl+Shift+M'
 
+/**
+ * macOS routes ⌘V / ⌘C / ⌘A / ⌘Z through the application menu — with no menu installed those
+ * shortcuts silently do nothing, which is why pasting into the editor looked broken. Windows and
+ * Linux handle the clipboard keys in the renderer, so they keep the chrome-free look.
+ */
+function installMenu(): void {
+  if (process.platform !== 'darwin') {
+    Menu.setApplicationMenu(null)
+    return
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' }
+        ]
+      },
+      {
+        label: '编辑',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' }
+        ]
+      },
+      { role: 'windowMenu' }
+    ])
+  )
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  // 隐藏 Windows/Linux 上默认的 File/Edit/View/Window 菜单栏，界面由应用自身提供。
-  Menu.setApplicationMenu(null)
+  installMenu()
 
   app.on('second-instance', () => {
     showMainWindow()

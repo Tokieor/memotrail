@@ -1,4 +1,4 @@
-import { app, ipcMain } from 'electron'
+import { app, clipboard, ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import * as memos from './memos/client'
 import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
@@ -24,6 +24,17 @@ function broadcastChange(): void {
 }
 
 export function registerIpc(): void {
+  // macOS often offers a screenshot only as a pasteboard image, with no file the renderer can see.
+  handle('clipboard:read-image', async (): Promise<{ type: string; data: string } | null> => {
+    for (const item of await clipboard.read()) {
+      const type = item.types.find((candidate) => candidate.startsWith('image/'))
+      if (!type) continue
+      // Image MIME types always resolve to a Blob; the union only exists for bookmark entries.
+      const blob = (await item.getType(type)) as unknown as Blob
+      return { type, data: Buffer.from(await blob.arrayBuffer()).toString('base64') }
+    }
+    return null
+  })
   handle('config:get', () => loadConfig())
   handle('config:set', (patch: Partial<AppConfig>) => {
     const previous = loadConfig()
