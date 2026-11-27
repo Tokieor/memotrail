@@ -18,7 +18,8 @@ type SettingsSection = 'connection' | 'general' | 'shortcut' | 'appearance' | 'a
 
 const THEME_OPTIONS: { id: ThemeId; label: string; hint: string }[] = [
   { id: 'classic', label: '经典', hint: '暖白纸感底色，鼠尾草绿强调色' },
-  { id: 'minimal', label: '简约', hint: '纯黑白灰，不用彩色强调' }
+  { id: 'minimal', label: '简约', hint: '纯黑白灰，不用彩色强调' },
+  { id: 'checklist', label: '清单', hint: '白底细线、圆角字体、任务清单式排版' }
 ]
 
 const SIDEBAR_OPTIONS: { id: SidebarCard; label: string }[] = [

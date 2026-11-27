@@ -33,7 +33,8 @@ export function applyCachedTheme(): void {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw) as Partial<ThemeChoice>
-    applyTheme(parsed.theme === 'minimal' ? 'minimal' : 'classic', parsed.appearance ?? 'light')
+    const theme: ThemeId = parsed.theme === 'minimal' || parsed.theme === 'checklist' ? parsed.theme : 'classic'
+    applyTheme(theme, parsed.appearance ?? 'light')
   } catch {
     /* ignore malformed cache */
   }

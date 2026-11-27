@@ -1275,3 +1275,183 @@ button {
 .color-swatch.selected { outline: 2px solid var(--accent); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .dialog-warning { margin: 0; font-size: calc(11px * var(--font-scale, 1)); color: var(--danger); }
+
+.feed-title { display: none; }
+
+/* ============================================================
+ * 清单主题 · Checklist
+ * 白底细线、圆角字体、任务清单式排版（参考 Vicu 的桌面视觉语言）
+ * ============================================================ */
+:root[data-theme='checklist'] {
+  --bg: #fbfbfa;
+  --bg-soft: #fbfbfa;
+  --text: #23252a;
+  --text-soft: #6b7078;
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --ink: #1f2227;
+  --body: #3f444b;
+  --muted: #6b7078;
+  --faint: #9aa0a8;
+  --border: #ecedee;
+  --border-soft: #eef0f1;
+  --divider: #f2f3f4;
+  --accent: #3557d4;
+  --accent-hover: #2b48b8;
+  --accent-soft: #eaf0ff;
+  --accent-mid: #7c96e8;
+  --accent-line: #dbe3fb;
+  --on-accent: #ffffff;
+  --amber-soft: #fdf4e8;
+  --amber: #b97b28;
+  --blue-tag: #3b5bd4;
+  --rose-tag: #d1537c;
+  --danger: #d24a4a;
+  --danger-soft: #fdeeee;
+  --chip-off: #dfe2e6;
+  --tint-hover: rgba(35, 37, 42, 0.045);
+  --tint-active: #e9efff;
+  --tint-tag: rgba(53, 87, 212, 0.1);
+  --tint-tag-hover: rgba(53, 87, 212, 0.18);
+  --tone-1: #3b5bd4;
+  --tone-2: #17a398;
+  --tone-3: #e0852a;
+  --tone-4: #d1537c;
+  --tag-ink: #3557d4;
+  --tag-bg: rgba(53, 87, 212, 0.1);
+  --tag-bg-hover: rgba(53, 87, 212, 0.18);
+  --heat-0: #eff1f3;
+  --heat-1: #d7e0fb;
+  --heat-2: #b2c4f5;
+  --heat-3: #7f9aec;
+  --heat-4: #3b5bd4;
+  --heat-ink-3: #10131a;
+  --heat-ink-4: #ffffff;
+  --r-card: 12px;
+  --r-ctl: 9px;
+  --r-btn: 8px;
+  --shadow-card: none;
+  --shadow-float: 0 8px 24px rgba(23, 26, 33, 0.12);
+  --font-sans: 'SF Pro Rounded', ui-rounded, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+}
+
+:root[data-theme='checklist'][data-appearance='dark'] {
+  --bg: #15171b;
+  --bg-soft: #15171b;
+  --text: #d9dee6;
+  --text-soft: #9aa1ac;
+  --paper: #0f1114;
+  --surface: #171a1f;
+  --ink: #eceef2;
+  --body: #c6cbd3;
+  --muted: #9aa1ac;
+  --faint: #6f7681;
+  --border: #262a31;
+  --border-soft: #23272e;
+  --divider: #1f2329;
+  --accent: #7d95f0;
+  --accent-hover: #93a8f4;
+  --accent-soft: #1e2740;
+  --accent-mid: #4f66b8;
+  --accent-line: #2c3860;
+  --amber-soft: #2a2318;
+  --amber: #d8a35c;
+  --blue-tag: #8ba4f5;
+  --rose-tag: #e284a4;
+  --danger: #e06666;
+  --danger-soft: #2a1c1c;
+  --chip-off: #2c3138;
+  --tint-hover: rgba(255, 255, 255, 0.05);
+  --tint-active: #1f2740;
+  --tint-tag: rgba(125, 149, 240, 0.14);
+  --tint-tag-hover: rgba(125, 149, 240, 0.24);
+  --tone-1: #7d95f0;
+  --tone-2: #3fc4b4;
+  --tone-3: #e0a05a;
+  --tone-4: #e284a4;
+  --tag-ink: #a9bcf7;
+  --tag-bg: rgba(125, 149, 240, 0.14);
+  --tag-bg-hover: rgba(125, 149, 240, 0.24);
+  --heat-0: #1d2127;
+  --heat-1: #26304d;
+  --heat-2: #35457a;
+  --heat-3: #4d63ad;
+  --heat-4: #7d95f0;
+  --heat-ink-3: #ffffff;
+  --heat-ink-4: #0f1114;
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- 清单主题的排版改写 ---- */
+/* 侧栏用一条细线收边，代替色块边界 */
+:root[data-theme='checklist'] .sidebar { border-right: 1px solid var(--border); }
+
+/* 选中项：淡蓝药丸 + 蓝字，而不是整块反色 */
+:root[data-theme='checklist'] .nav-item.active,
+:root[data-theme='checklist'] .tag-item.active { background: var(--tint-active); color: var(--accent); font-weight: 500; }
+:root[data-theme='checklist'] .nav-item.active:hover,
+:root[data-theme='checklist'] .tag-item.active:hover { background: var(--tint-active); }
+:root[data-theme='checklist'] .nav-item.active .count,
+:root[data-theme='checklist'] .tag-item.active .count { color: var(--accent); opacity: 0.72; }
+:root[data-theme='checklist'] .tag-item.active .tag-pin { color: var(--accent); }
+:root[data-theme='checklist'] .nav-item { height: 38px; border-radius: 9px; }
+
+/* 内容区大标题 */
+:root[data-theme='checklist'] .feed-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0 16px;
+  font-size: calc(30px * var(--font-scale, 1));
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--ink);
+}
+
+/* 清单主题自带大标题，顶栏里的重复标题与统计让位 */
+:root[data-theme='checklist'] .feed-topbar > div:first-child { display: none; }
+
+/* 笔记从「卡片」变成「清单行」：细线分隔 + 左侧空心圆 */
+:root[data-theme='checklist'] .note-card {
+  padding: 14px 10px 14px 34px;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='checklist'] .note-card::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 19px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid #d6d9de;
+}
+:root[data-theme='checklist'][data-appearance='dark'] .note-card::before { border-color: #3a3f47; }
+:root[data-theme='checklist'] .note-card:hover { background: var(--tint-hover); }
+:root[data-theme='checklist'] .note-card + .note-card { margin-top: 0; }
+:root[data-theme='checklist'] .note-card:last-child { border-bottom: 0; }
+
+/* 置顶笔记原本用左侧竖条标记，清单主题里改成蓝色圆环 */
+:root[data-theme='checklist'] .note-card.is-pinned::before {
+  left: 9px;
+  top: 19px;
+  bottom: auto;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  opacity: 1;
+}
+:root[data-theme='checklist'] .feed-inner.list-mode .note-card.is-pinned::before { top: 15px; }
+
+/* 输入区：白底 + 细边框，圆角更大 */
+:root[data-theme='checklist'] .composer { border-color: var(--border); border-radius: 14px; }
+
+/* 列表视图（紧凑模式）在清单主题下不带圆角底色 */
+:root[data-theme='checklist'] .feed-inner.list-mode .note-card { padding: 10px 10px 10px 34px; }
+:root[data-theme='checklist'] .feed-inner.list-mode .note-card::before { top: 15px; }

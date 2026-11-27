@@ -503,7 +503,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
           </>
         ) : (
           <>
-            <header className="topbar">
+            <header className="topbar feed-topbar">
               <div>
                 <h1>{viewTitle}</h1>
                 <p className="subtitle">
@@ -549,6 +549,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
             <div className="feed-scroll" ref={feedRef} onScroll={onFeedScroll}>
               <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
+                <h1 className="feed-title">{viewTitle}</h1>
                 <Composer
                   focusSignal={composerFocus}
                   tagSuggestions={tagStats.map((stat) => stat.name)}

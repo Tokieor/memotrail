@@ -40,7 +40,7 @@ export type ApiResult<T> =
   | { success: false; error: string; status?: number }
 
 /** Visual style preset: `classic` keeps the sage accent, `minimal` is pure black/white/grey. */
-export type ThemeId = 'classic' | 'minimal'
+export type ThemeId = 'classic' | 'minimal' | 'checklist'
 
 /** Colour scheme preference; `system` follows the OS. */
 export type Appearance = 'light' | 'dark' | 'system'

@@ -98,7 +98,7 @@ function read(): StoredConfig {
       username: typeof raw.username === 'string' ? raw.username : DEFAULTS.username,
       quickHotkey: typeof raw.quickHotkey === 'string' && raw.quickHotkey ? raw.quickHotkey : DEFAULTS.quickHotkey,
       launchAtLogin: raw.launchAtLogin === true,
-      theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
+      theme: raw.theme === 'minimal' ? 'minimal' : raw.theme === 'checklist' ? 'checklist' : 'classic',
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
       // 字号只允许 12–20px，防止手改配置文件时把界面撑爆。
