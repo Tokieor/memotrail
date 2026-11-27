@@ -53,11 +53,20 @@ Memos 官方只有 Web / PWA。浏览器里记一条笔记，意味着：切窗�
 | Windows x64 | `MemoTrail-<版本>-x64.exe` |
 | Linux x64 | `MemoTrail-<版本>-x86_64.AppImage` |
 
-包**未签名也未公证**，macOS 首次打开需要右键 →「打开」，或者：
+包**未签名也未公证**（构建时只做 ad-hoc 签名），所以 macOS 首次打开会被 Gatekeeper 拦下。
+
+**macOS 安装步骤**
+
+1. 打开 dmg，把 `MemoTrail.app` 拖进「应用程序」文件夹（只双击 dmg 里的 app 不会出现在启动台）；
+2. 在「应用程序」里**右键 →「打开」**；
+3. 如果提示「Apple 无法验证」/「已损坏」，到 **系统设置 → 隐私与安全性**，页面下方会有「仍要打开 MemoTrail」，点它并输入密码；
+4. 或者直接用命令行清掉隔离标记，之后双击就能开：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/MemoTrail.app
 ```
+
+> 首次连局域网里的 Memos 服务器时，macOS 会弹「MemoTrail 想要查找并连接到本地网络上的设备」，必须允许，否则会报 `ERR_ADDRESS_UNREACHABLE`。
 
 Linux：
 
