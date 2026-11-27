@@ -3,6 +3,7 @@ import type { AppConfig, Appearance, SidebarCard, ThemeId } from '@shared/types'
 import { describeError } from '../lib/errors'
 import { formatAccelerator } from '../lib/accelerator'
 import { applyTheme } from '../lib/theme'
+import { applyFontSize, fontSizeFromConfig, FONT_SIZE_OPTIONS } from '../lib/font-size'
 import { CheckIcon, ChevronIcon, EyeIcon, SyncIcon } from './Icons'
 
 interface Props {
@@ -85,11 +86,12 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
     }
   }
 
-  async function chooseLook(patch: { theme?: ThemeId; appearance?: Appearance; sidebarCard?: SidebarCard }): Promise<void> {
+  async function chooseLook(patch: { theme?: ThemeId; appearance?: Appearance; sidebarCard?: SidebarCard; fontSize?: number }): Promise<void> {
     try {
       const next = await window.api.config.set(patch)
       onConfigChange(next)
       applyTheme(next.theme, next.appearance)
+      applyFontSize(fontSizeFromConfig(next))
       setMessage('')
     } catch (err) {
       setMessage(describeError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
@@ -254,6 +256,23 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                     title={option.hint}
                     className={config.theme === option.id ? 'active' : ''}
                     onClick={() => void chooseLook({ theme: option.id })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pref-row compact">
+              <span className="pref-title">字体大小</span>
+              <div className="segmented">
+                {FONT_SIZE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={config.fontSize === option.value ? 'active' : ''}
+                    title={`正文字号 ${option.value}px`}
+                    onClick={() => void chooseLook({ fontSize: option.value })}
                   >
                     {option.label}
                   </button>

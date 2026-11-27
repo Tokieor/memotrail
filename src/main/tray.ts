@@ -14,9 +14,10 @@ export interface TrayActions {
 }
 
 export function createTray(actions: TrayActions): Tray {
-  const image = nativeImage.createFromPath(resourcePath('trayTemplate.png'))
-  // macOS draws template images black/white to match the menu bar.
-  if (process.platform === 'darwin') image.setTemplateImage(true)
+  const isMac = process.platform === 'darwin'
+  // macOS 用模板图自动适配菜单栏明暗；Windows 用彩色图标，深色任务栏上也看得清。
+  const image = nativeImage.createFromPath(resourcePath(isMac ? 'trayTemplate.png' : 'trayWindows.png'))
+  if (isMac) image.setTemplateImage(true)
 
   const tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
   tray.setToolTip('MemoTrail')

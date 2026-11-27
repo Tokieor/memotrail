@@ -70,6 +70,8 @@ export interface AppConfig {
   theme: ThemeId
   appearance: Appearance
   sidebarCard: SidebarCard
+  /** 正文字号基准（px），渲染层按 14px 换算为 --font-scale。 */
+  fontSize: number
   /** Tag colours and pins, kept locally because the API has no place for them. */
   tagMeta: TagMetaMap
 }

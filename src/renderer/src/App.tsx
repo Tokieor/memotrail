@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { AppConfig, User } from '@shared/types'
 import { applyTheme, watchSystemAppearance } from './lib/theme'
+import { applyFontSize, fontSizeFromConfig } from './lib/font-size'
 import { SignIn } from './views/SignIn'
 import { Timeline } from './views/Timeline'
 
@@ -39,6 +40,12 @@ export function App(): JSX.Element {
     applyTheme(config.theme, config.appearance)
     return watchSystemAppearance(config.theme, config.appearance)
   }, [config?.theme, config?.appearance])
+
+  // 字体大小随配置实时生效，两个窗口通过同一个 CSS 变量联动。
+  useEffect(() => {
+    if (!config) return
+    applyFontSize(fontSizeFromConfig(config))
+  }, [config?.fontSize])
 
   const onSignedIn = useCallback((signedIn: User, next: AppConfig) => {
     setUser(signedIn)

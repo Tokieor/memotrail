@@ -1,0 +1,7 @@
+# Mac / Windows 混用：索引与工作区统一 LF，避免整文件假 diff
+* text=auto eol=lf
+
+# 二进制资源不做换行转换
+*.png binary
+*.ico binary
+*.icns binary

@@ -11,6 +11,7 @@ const DEFAULTS: AppConfig = {
   theme: 'classic',
   appearance: 'light',
   sidebarCard: 'heatmap',
+  fontSize: 14,
   tagMeta: {}
 }
 
@@ -100,6 +101,10 @@ function read(): StoredConfig {
       theme: raw.theme === 'minimal' ? 'minimal' : 'classic',
       appearance: raw.appearance === 'dark' || raw.appearance === 'system' ? raw.appearance : 'light',
       sidebarCard: raw.sidebarCard === 'calendar' ? 'calendar' : 'heatmap',
+      // 字号只允许 12–20px，防止手改配置文件时把界面撑爆。
+      fontSize: typeof raw.fontSize === 'number' && Number.isFinite(raw.fontSize)
+        ? Math.min(20, Math.max(12, Math.round(raw.fontSize)))
+        : DEFAULTS.fontSize,
       tagMeta: sanitizeTagMeta(raw.tagMeta),
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {}),
       ...(raw.windowState && typeof raw.windowState.width === 'number' && typeof raw.windowState.height === 'number'

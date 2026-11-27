@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, Menu } from 'electron'
 import { clearLegacyArchived, loadConfig, loadRefreshToken, readLegacyArchived, saveRefreshToken } from './config'
 import { registerQuickHotkey, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
@@ -12,6 +12,9 @@ registerFileScheme()
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  // 隐藏 Windows/Linux 上默认的 File/Edit/View/Window 菜单栏，界面由应用自身提供。
+  Menu.setApplicationMenu(null)
+
   app.on('second-instance', () => {
     showMainWindow()
   })

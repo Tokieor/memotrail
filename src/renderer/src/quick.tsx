@@ -7,6 +7,7 @@ import {
 import { VisibilityPicker } from './components/VisibilityPicker'
 import { formatAccelerator } from './lib/accelerator'
 import { applyCachedTheme, applyTheme, watchSystemAppearance } from './lib/theme'
+import { applyCachedFontSize, applyFontSize, fontSizeFromConfig } from './lib/font-size'
 import { caretPoint, filterTags, findTagQuery, type CaretPoint } from './lib/tag-suggest'
 import { renderMarkdown } from './lib/markdown'
 import { visibleLength } from './lib/text'
@@ -36,6 +37,7 @@ function QuickCapture(): JSX.Element {
       setConfigured(Boolean(config?.serverUrl))
       if (config?.quickHotkey) setHotkey(config.quickHotkey)
       if (config?.theme) applyTheme(config.theme, config.appearance)
+      if (config) applyFontSize(fontSizeFromConfig(config))
       const status = await window.api.auth.status()
       if (status.success && status.data) {
         const preferred = status.data?.defaultVisibility as Visibility | undefined
@@ -47,12 +49,15 @@ function QuickCapture(): JSX.Element {
   useEffect(() => window.api.config.onChange((next) => {
     setHotkey(next.quickHotkey)
     applyTheme(next.theme, next.appearance)
+    applyFontSize(fontSizeFromConfig(next))
   }), [])
 
   useEffect(() => {
     applyCachedTheme()
+    applyCachedFontSize()
     void window.api.config.get().then((config) => {
       applyTheme(config.theme, config.appearance)
+      applyFontSize(fontSizeFromConfig(config))
       return watchSystemAppearance(config.theme, config.appearance)
     })
   }, [])

@@ -67,7 +67,31 @@ def tray_template(path, size=44):
     write_png(path, size, size, px)
 
 
+def tray_windows(path, size=32):
+    """Windows 托盘图标：蓝色圆底 + 白点，浅色/深色任务栏都清晰（macOS 仍用模板图）。"""
+    dots = [(0.32, 0.68, 0.105), (0.50, 0.50, 0.078), (0.68, 0.32, 0.052)]
+    px = bytearray(size * size * 4)
+    for y in range(size):
+        t = y / (size - 1)
+        bg = (int(31 + 40 * t), int(111 + 20 * t), int(235 + 10 * t))
+        for x in range(size):
+            a = coverage(hypot(x + 0.5 - size / 2, y + 0.5 - size / 2), size * 0.48, 1.0)
+            if a <= 0:
+                continue
+            r, g, b = bg
+            for dx, dy, dr in dots:
+                c = coverage(hypot(x + 0.5 - dx * size, y + 0.5 - dy * size), dr * size)
+                if c > 0:
+                    r = int(r + (255 - r) * c)
+                    g = int(g + (255 - g) * c)
+                    b = int(b + (255 - b) * c)
+            i = (y * size + x) * 4
+            px[i:i + 4] = bytes((r, g, b, int(a * 255)))
+    write_png(path, size, size, px)
+
+
 if __name__ == '__main__':
     app_icon('resources/icon.png')
     tray_template('resources/trayTemplate.png')
+    tray_windows('resources/trayWindows.png')
     print('icons written')

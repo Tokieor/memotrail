@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { AppConfig, ListMemosOptions, Memo, MemoList, MemoState, QuickCapturePayload, User, Visibility } from '../shared/types'
 
 const api = {
+  /** Host OS, used by the renderer to adapt layout (macOS traffic lights need top inset). */
+  platform: process.platform,
   config: {
     get: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
     set: (patch: Partial<AppConfig>): Promise<AppConfig> => ipcRenderer.invoke('config:set', patch),
