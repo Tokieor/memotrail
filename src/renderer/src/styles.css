@@ -25,6 +25,7 @@
   --muted: #7a766f;
   --faint: #a9a49b;
   --border: #edeae3;
+  --border-soft: rgba(46, 44, 41, 0.07);
   --divider: #f0eee8;
   --accent: #5c7f6f;
   --accent-hover: #4e6e5f;
@@ -157,6 +158,7 @@ button {
 }
 
 .main-area {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -403,11 +405,35 @@ button {
 .ghost-btn.on { color: var(--accent); }
 
 /* ---------- Feed & note cards ---------- */
+/* The composer is pinned above the list: it lives in its own block, the list scrolls under it. */
+.feed-head {
+  flex: 0 0 auto;
+  padding: max(var(--feed-top-min), calc(var(--sidebar-inset) + var(--brand-h) + var(--sidebar-gap) - var(--topbar-h))) 24px 0;
+}
 .feed-scroll {
   flex: 1; overflow-y: auto;
   /* Top padding is derived so the first card lines up with the sidebar card. */
   padding: max(var(--feed-top-min), calc(var(--sidebar-inset) + var(--brand-h) + var(--sidebar-gap) - var(--topbar-h))) 24px 24px;
+  /* The list is a surface, not a document: no visible scrollbar track. */
+  scrollbar-width: none;
 }
+.feed-scroll::-webkit-scrollbar { width: 0; height: 0; }
+/* Used when the composer already supplies the top spacing. */
+.feed-scroll.flush { padding-top: 0; }
+
+/* Floating "back to top" pill, bottom-right of the content column. */
+.to-top {
+  position: absolute; right: 26px; bottom: 22px; z-index: 20;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid var(--border-soft);
+  background: var(--surface); color: var(--accent);
+  box-shadow: var(--shadow-float); cursor: pointer;
+  opacity: 0; transform: translateY(6px); pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.15s ease;
+}
+.to-top.show { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { background: var(--tint-hover); }
 .feed-inner { width: 100%; max-width: var(--feed-w); margin: 0 auto; }
 .feed-section-label {
   font-size: calc(11px * var(--font-scale, 1)); font-weight: 500; letter-spacing: 0.5px;
@@ -451,7 +477,7 @@ button {
 .note-card {
   position: relative;
   padding: 14px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-soft);
   border-radius: var(--r-card);
   background: var(--surface);
   box-shadow: var(--shadow-card);
@@ -843,6 +869,7 @@ button {
   --muted: #6f6f6f;
   --faint: #9b9b9b;
   --border: #e5e5e5;
+  --border-soft: rgba(0, 0, 0, 0.07);
   --divider: #efefef;
   --accent: #262626;
   --accent-hover: #000000;
@@ -894,6 +921,7 @@ button {
   --muted: #9d9891;
   --faint: #6d6961;
   --border: #35332f;
+  --border-soft: rgba(255, 255, 255, 0.09);
   --divider: #2a2926;
   --accent: #6f9482;
   --accent-hover: #7fa891;
@@ -944,6 +972,7 @@ button {
   --muted: #9a9a9a;
   --faint: #6b6b6b;
   --border: #2c2c2c;
+  --border-soft: rgba(255, 255, 255, 0.08);
   --divider: #232323;
   --accent: #e6e6e6;
   --accent-hover: #ffffff;

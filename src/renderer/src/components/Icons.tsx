@@ -95,6 +95,11 @@ export function ChevronIcon(props: IconProps): JSX.Element {
   return <svg {...base(props)}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
+/** Arrow pointing up — the feed's "back to top" affordance. */
+export function ArrowUpIcon(props: IconProps): JSX.Element {
+  return <svg {...base(props)}><path d="M12 19V6M6 12l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+}
+
 /** Plain arrow pointing right — the composer's send affordance. */
 export function SendIcon(props: IconProps): JSX.Element {
   return (

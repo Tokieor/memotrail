@@ -13,6 +13,7 @@ import {
   type TagSort, type TagStat
 } from '../lib/tags'
 import {
+  ArrowUpIcon,
   BackIcon,
   CardViewIcon,
   ListViewIcon,
@@ -81,6 +82,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   /** Name of the memo whose "more" menu is open — at most one at a time. */
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const feedRef = useRef<HTMLDivElement>(null)
+  const [showToTop, setShowToTop] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300)
@@ -123,8 +126,19 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
 
   useEffect(() => {
     void load(true, { silent: true })
+    // A different filter starts at the top of a different list.
+    feedRef.current?.scrollTo({ top: 0 })
+    setShowToTop(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav, debouncedQuery, tag, day])
+
+  function onFeedScroll(event: React.UIEvent<HTMLDivElement>): void {
+    setShowToTop(event.currentTarget.scrollTop > 320)
+  }
+
+  function scrollToTop(): void {
+    feedRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   // Writes from the quick-capture window (and any other window) reload the timeline.
   useEffect(() => window.api.memos.onChange(() => void load(true, { silent: true })), [load])
@@ -525,8 +539,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
               </div>
             </header>
 
-            <div className="feed-scroll">
-              <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
+            <div className="feed-head">
+              <div className="feed-inner">
                 <Composer
                   focusSignal={composerFocus}
                   tagSuggestions={tagStats.map((stat) => stat.name)}
@@ -535,8 +549,14 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                     setMemos((current) => [memo, ...current])
                     // Writing from 归档 files the new note straight into the archive.
                     if (nav === 'archive') void setMemoState(memo, 'ARCHIVED')
+                    feedRef.current?.scrollTo({ top: 0 })
                   }}
                 />
+              </div>
+            </div>
+
+            <div className="feed-scroll flush" ref={feedRef} onScroll={onFeedScroll}>
+              <div className={`feed-inner${listMode === 'list' ? ' list-mode' : ''}`}>
 
                 {/* With pins in play the two groups carry their own labels; otherwise keep «最近». */}
                 {nav !== 'archive' && pinnedMemos.length === 0 && restMemos.length > 0 && (
@@ -578,6 +598,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
                 )}
               </div>
             </div>
+
+            <button
+              className={`to-top${showToTop ? ' show' : ''}`}
+              onClick={scrollToTop}
+              title="回到顶部"
+              aria-label="回到顶部"
+              tabIndex={showToTop ? 0 : -1}
+            >
+              <ArrowUpIcon size={18} />
+            </button>
           </>
         )}
       </div>
