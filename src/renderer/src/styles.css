@@ -109,6 +109,22 @@ body {
   color: var(--ink);
   font: calc(14px * var(--font-scale, 1)) / 1.55 var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* The window chrome is UI, not a document: dragging across buttons, counts or the calendar
+     should never leave a blue text selection behind. Note content opts back in below. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.markdown,
+.composer-preview,
+.note-body,
+.memo-snippet,
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 button {
@@ -707,6 +723,15 @@ button {
 .signin-wrap {
   display: flex; align-items: center; justify-content: center;
   height: 100%; padding: 32px; background: var(--paper);
+  /* Before sign-in there is no sidebar/topbar to grab: the card itself moves the window. */
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.signin-card input,
+.signin-card button,
+.signin-card a {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 .signin-card {
   width: 100%; max-width: 380px; padding: 36px 32px;

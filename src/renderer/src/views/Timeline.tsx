@@ -93,10 +93,12 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   }, [nav, debouncedQuery, tag, day, view, listMode, editing])
 
   const load = useCallback(
-    async (reset: boolean) => {
+    async (reset: boolean, options?: { silent?: boolean }) => {
       setLoading(true)
       setError('')
-      setSyncState('syncing')
+      // Switching filters or picking up a background write must not make the sync card blink
+      // through 同步中 / ··· — only an explicit refresh shows the spinner.
+      if (!options?.silent) setSyncState('syncing')
       const effectiveTag = tag
       // 归档 is a server-side bucket: the same list endpoint, a different `state`.
       const result = await window.api.memos.list({
@@ -120,16 +122,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   )
 
   useEffect(() => {
-    void load(true)
+    void load(true, { silent: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav, debouncedQuery, tag, day])
 
   // Writes from the quick-capture window (and any other window) reload the timeline.
-  useEffect(() => window.api.memos.onChange(() => void load(true)), [load])
+  useEffect(() => window.api.memos.onChange(() => void load(true, { silent: true })), [load])
 
   // Refreshing when the window regains focus keeps quick-captured memos in view.
   useEffect(() => {
-    const onFocus = (): void => void load(true)
+    const onFocus = (): void => void load(true, { silent: true })
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [load])
