@@ -18,6 +18,8 @@ import type {
 const api = {
   /** Host OS, used by the renderer to adapt layout (macOS traffic lights need top inset). */
   platform: process.platform,
+  /** 应用版本（来自 package.json），关于页展示用。 */
+  version: (): Promise<string> => ipcRenderer.invoke('app:version') as Promise<string>,
   config: {
     get: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
     set: (patch: Partial<AppConfig>): Promise<AppConfig> => ipcRenderer.invoke('config:set', patch),

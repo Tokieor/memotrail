@@ -1,5 +1,7 @@
 import { app, Menu } from 'electron'
-import { clearLegacyArchived, loadAccessToken, loadConfig, loadRefreshToken, readLegacyArchived, saveConfig, saveRefreshToken } from './config'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { clearLegacyArchived, defaultHotkeys, loadAccessToken, loadConfig, loadRefreshToken, readLegacyArchived, saveConfig, saveRefreshToken, useDevHotkeysInFile } from './config'
 import { registerMainHotkey, registerQuickHotkey, resumeHotkeys, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
@@ -7,10 +9,31 @@ import { handleFileProtocol, registerFileScheme } from './protocol'
 import { createTray } from './tray'
 import { allowWindowClose, createMainWindow, showMainWindow, showQuickWindow } from './windows'
 
+/**
+ * 开发版与安装版数据隔离：
+ * Electron 默认两者共用 app.getPath('userData')，导致开发调试会覆盖日常数据。
+ * 开发态把 userData 指向独立目录，只把 config.json 拷过去（含登录态），其余缓存不迁移。
+ * 必须在 app.whenReady() 之前设置，否则 Electron 已经锁定路径。
+ */
+function isolateDevUserData(): void {
+  if (app.isPackaged) return
+  const productionDir = app.getPath('userData')
+  const devDir = join(dirname(productionDir), `${app.name}-Dev`)
+  if (!existsSync(devDir)) mkdirSync(devDir, { recursive: true })
+  const source = join(productionDir, 'config.json')
+  const target = join(devDir, 'config.json')
+  if (existsSync(source) && !existsSync(target)) {
+    copyFileSync(source, target)
+    useDevHotkeysInFile(target)
+  }
+  app.setPath('userData', devDir)
+}
+
+isolateDevUserData()
+
 registerFileScheme()
 
-const DEFAULT_QUICK_HOTKEY = 'CommandOrControl+Shift+M'
-const DEFAULT_MAIN_HOTKEY = 'CommandOrControl+Shift+O'
+const { quickHotkey: DEFAULT_QUICK_HOTKEY, mainHotkey: DEFAULT_MAIN_HOTKEY } = defaultHotkeys()
 
 /**
  * macOS routes ⌘V / ⌘C / ⌘A / ⌘Z through the application menu — with no menu installed those

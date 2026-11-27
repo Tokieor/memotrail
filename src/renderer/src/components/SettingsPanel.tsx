@@ -101,9 +101,11 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
   const [message, setMessage] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [session, setSession] = useState<SessionInfo>({ mode: config.authMode, tokenTail: null })
+  const [appVersion, setAppVersion] = useState('')
 
   useEffect(() => {
     void window.api.auth.session().then(setSession).catch(() => undefined)
+    void window.api.version().then(setAppVersion).catch(() => undefined)
   }, [])
 
   const byToken = session.mode === 'token'
@@ -507,7 +509,7 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
             <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
               MemoTrail · Memos Desktop<br />
               一个简洁、轻量的 Memos 第三方桌面客户端。<br />
-              版本 0.1.0 · Electron + React 18 · 适配 Memos {config.memosVersion}
+              版本 {appVersion || '…'} · Electron + React 18 · 适配 Memos {config.memosVersion}
             </p>
           </div>
         )}

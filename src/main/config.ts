@@ -3,14 +3,45 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path'
 import type { AppConfig, MemosVersion, TagColorKey, TagMetaEntry, TagMetaMap } from '../shared/types'
 
+/**
+ * 默认全局快捷键。开发态用 Alt 组合避开安装版——两者数据已隔离、可以同时运行，
+ * 若还抢同一组热键，后启动的那个会注册失败。
+ */
+function hotkeyDefaults(packaged: boolean): { quickHotkey: string; mainHotkey: string } {
+  return packaged
+    ? { quickHotkey: 'CommandOrControl+Shift+M', mainHotkey: 'CommandOrControl+Shift+O' }
+    : { quickHotkey: 'CommandOrControl+Alt+Shift+M', mainHotkey: 'CommandOrControl+Alt+Shift+O' }
+}
+
+/** 当前运行态的默认快捷键（开发态用 Alt 组合，避开安装版占用的热键）。 */
+export function defaultHotkeys(): { quickHotkey: string; mainHotkey: string } {
+  return hotkeyDefaults(app.isPackaged)
+}
+
+/** 把配置里的快捷键改成开发态默认值（首次从安装版拷贝配置时用）。 */
+export function useDevHotkeysInFile(configFile: string): void {
+  if (app.isPackaged || !existsSync(configFile)) return
+  try {
+    const raw = JSON.parse(readFileSync(configFile, 'utf-8')) as Record<string, unknown>
+    const devKeys = hotkeyDefaults(false)
+    raw.quickHotkey = devKeys.quickHotkey
+    raw.mainHotkey = devKeys.mainHotkey
+    writeFileSync(configFile, JSON.stringify(raw, null, 2), { encoding: 'utf-8', mode: 0o600 })
+  } catch {
+    /* 坏文件交给正常的 read() 回退逻辑处理 */
+  }
+}
+
+const HOTKEY_DEFAULTS = defaultHotkeys()
+
 const DEFAULTS: AppConfig = {
   serverUrl: '',
   username: '',
   authMode: 'password',
   memosVersion: '0.31.0',
   serverVersion: '',
-  quickHotkey: 'CommandOrControl+Shift+M',
-  mainHotkey: 'CommandOrControl+Shift+O',
+  quickHotkey: HOTKEY_DEFAULTS.quickHotkey,
+  mainHotkey: HOTKEY_DEFAULTS.mainHotkey,
   closeToTray: false,
   launchAtLogin: false,
   theme: 'classic',

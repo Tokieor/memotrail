@@ -24,6 +24,9 @@ function broadcastChange(): void {
 }
 
 export function registerIpc(): void {
+  // 关于页展示真实包版本，避免各处硬编码导致升级后仍显示旧号。
+  handle('app:version', () => app.getVersion())
+
   // 自绘标题栏的三个按钮：操作的是发请求的那个窗口，不一定是主窗口（登录页也用它）。
   ipcMain.handle('window:controls', (event, action: unknown) => {
     if (!trusted(event)) return
