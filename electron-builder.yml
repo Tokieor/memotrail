@@ -17,6 +17,8 @@ extraResources:
     to: resources/
     filter:
       - "**/*"
+      # 候选稿是开发素材，不进发布包；生成脚本靠它重绘图标，留在仓库里即可
+      - "!icon-candidates/**"
 
 mac:
   icon: resources/icon.png
