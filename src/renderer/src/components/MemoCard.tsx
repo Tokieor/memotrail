@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
 import { defaultTagColor, tagColorVar } from '../lib/tags'
-import { MoreIcon } from './Icons'
+import { CloseIcon, MoreIcon } from './Icons'
 
 interface Props {
   memo: Memo
@@ -117,6 +117,7 @@ export function MemoCard({
   // 清单主题用左侧小圆点标出笔记的主标签颜色，没标签时留一个淡点。
   const rowTag = memo.tags && memo.tags.length > 0 ? memo.tags[0] : null
   const rowDot = rowTag ? (tagColors?.[rowTag] ?? tagColorVar(defaultTagColor(rowTag))) : undefined
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null)
   const [error, setError] = useState('')
   const menuButton = useRef<HTMLButtonElement>(null)
   const html = useMemo(() => renderMarkdown(memo.content, tagColors), [memo.content, tagColors])
@@ -144,6 +145,13 @@ export function MemoCard({
     if (tagEl?.dataset['tag']) {
       event.preventDefault()
       onSelectTag?.(tagEl.dataset['tag'])
+      return
+    }
+    const image = (event.target as HTMLElement).closest('img')
+    if (image) {
+      // Feed images are square thumbnails; a click opens the full picture.
+      event.preventDefault()
+      setLightbox({ src: image.src, alt: image.alt || '图片' })
       return
     }
     const anchor = (event.target as HTMLElement).closest('a')
@@ -202,6 +210,15 @@ export function MemoCard({
       </div>
 
       {error && <p className="inline-error" style={{ marginTop: 8 }}>{error}</p>}
+
+      {lightbox && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setLightbox(null)}>
+          <img src={lightbox.src} alt={lightbox.alt} onClick={(event) => event.stopPropagation()} />
+          <button className="lightbox-close" onClick={() => setLightbox(null)} title="关闭" aria-label="关闭">
+            <CloseIcon size={18} />
+          </button>
+        </div>
+      )}
     </article>
   )
 

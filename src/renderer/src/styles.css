@@ -785,6 +785,24 @@ button {
 .markdown table { border-collapse: collapse; font-size: 0.95em; }
 .markdown th, .markdown td { border: 1px solid var(--border); padding: 0.25em 0.5em; }
 .markdown img { max-width: 100%; border-radius: 8px; }
+
+/* Feed cards show images as square thumbnails (same size as the composer's attachment strip);
+   clicking one opens the lightbox with the full picture. */
+.note-body img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 9px;
+  margin: 0;
+  vertical-align: top;
+  cursor: zoom-in;
+}
+/* An image alone in its paragraph becomes a square chip, so several images sit in one row. */
+.note-body p:has(> img:only-child) {
+  display: inline-block;
+  margin: 2px 8px 4px 0;
+  line-height: 0;
+}
 .markdown hr { border: 0; border-top: 1px solid var(--border); margin: 0.8em 0; }
 .markdown input[type='checkbox'] { margin-right: 0.4em; }
 
