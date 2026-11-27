@@ -132,8 +132,16 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nav, debouncedQuery, tag, day])
 
+  // Scroll fires far more often than the browser paints; keep the state update to one per frame.
+  const scrollFrame = useRef(0)
+  const scrollTopRef = useRef(0)
   function onFeedScroll(event: React.UIEvent<HTMLDivElement>): void {
-    setShowToTop(event.currentTarget.scrollTop > 320)
+    scrollTopRef.current = event.currentTarget.scrollTop
+    if (scrollFrame.current !== 0) return
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      scrollFrame.current = 0
+      setShowToTop(scrollTopRef.current > 320)
+    })
   }
 
   function scrollToTop(): void {

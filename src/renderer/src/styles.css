@@ -473,7 +473,8 @@ button {
   border-radius: var(--r-card);
   background: var(--surface);
   box-shadow: var(--shadow-card);
-  transition: box-shadow 0.15s, border-color 0.15s;
+  /* Only the border animates: a shadow transition repaints the card on every hover frame. */
+  transition: border-color 0.15s;
 }
 .note-card:hover { box-shadow: var(--shadow-float); border-color: var(--accent-line); }
 .note-card + .note-card { margin-top: 10px; }
