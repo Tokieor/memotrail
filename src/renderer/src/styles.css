@@ -1411,47 +1411,42 @@ button {
 /* 清单主题自带大标题，顶栏里的重复标题与统计让位 */
 :root[data-theme='checklist'] .feed-topbar > div:first-child { display: none; }
 
-/* 笔记从「卡片」变成「清单行」：细线分隔 + 左侧空心圆 */
+/* 笔记从「卡片」变成「清单行」：细线分隔 + 左侧一个标签色圆点 */
 :root[data-theme='checklist'] .note-card {
-  padding: 14px 10px 14px 34px;
+  padding: 14px 10px 14px 30px;
   border: 0;
   border-bottom: 1px solid var(--border-soft);
   border-radius: 10px;
   background: transparent;
   box-shadow: none;
 }
+/* 圆点只是「这条笔记属于哪个标签」的色标，不是复选框：不可点、也不打勾。 */
 :root[data-theme='checklist'] .note-card::before {
   content: '';
   position: absolute;
-  left: 9px;
-  top: 19px;
-  width: 15px;
-  height: 15px;
+  left: 10px;
+  top: 23px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 1.5px solid #d6d9de;
+  background: var(--row-dot, var(--faint));
+  opacity: 0.5;
 }
-:root[data-theme='checklist'][data-appearance='dark'] .note-card::before { border-color: #3a3f47; }
+:root[data-theme='checklist'] .note-card.has-dot::before { opacity: 1; }
 :root[data-theme='checklist'] .note-card:hover { background: var(--tint-hover); }
 :root[data-theme='checklist'] .note-card + .note-card { margin-top: 0; }
 :root[data-theme='checklist'] .note-card:last-child { border-bottom: 0; }
 
-/* 置顶笔记原本用左侧竖条标记，清单主题里改成蓝色圆环 */
+/* 置顶的圆点换成强调色并加一圈淡光，靠颜色而不是勾选状态来区分 */
 :root[data-theme='checklist'] .note-card.is-pinned::before {
-  left: 9px;
-  top: 19px;
-  bottom: auto;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1.5px solid var(--accent);
+  background: var(--accent);
   opacity: 1;
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
-:root[data-theme='checklist'] .feed-inner.list-mode .note-card.is-pinned::before { top: 15px; }
 
 /* 输入区：白底 + 细边框，圆角更大 */
 :root[data-theme='checklist'] .composer { border-color: var(--border); border-radius: 14px; }
 
 /* 列表视图（紧凑模式）在清单主题下不带圆角底色 */
-:root[data-theme='checklist'] .feed-inner.list-mode .note-card { padding: 10px 10px 10px 34px; }
-:root[data-theme='checklist'] .feed-inner.list-mode .note-card::before { top: 15px; }
+:root[data-theme='checklist'] .feed-inner.list-mode .note-card { padding: 10px 10px 10px 30px; }
+:root[data-theme='checklist'] .feed-inner.list-mode .note-card::before { top: 17px; }

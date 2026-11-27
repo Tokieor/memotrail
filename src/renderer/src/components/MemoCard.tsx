@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Memo } from '@shared/types'
 import { relativeTime, renderMarkdown } from '../lib/markdown'
+import { defaultTagColor, tagColorVar } from '../lib/tags'
 import { MoreIcon } from './Icons'
 
 interface Props {
@@ -113,6 +114,9 @@ export function MemoCard({
   const [busy, setBusy] = useState(false)
   // The server owns the bucket; a missing `state` on older builds simply means "not archived".
   const archived = memo.state === 'ARCHIVED'
+  // 清单主题用左侧小圆点标出笔记的主标签颜色，没标签时留一个淡点。
+  const rowTag = memo.tags && memo.tags.length > 0 ? memo.tags[0] : null
+  const rowDot = rowTag ? (tagColors?.[rowTag] ?? tagColorVar(defaultTagColor(rowTag))) : undefined
   const [error, setError] = useState('')
   const menuButton = useRef<HTMLButtonElement>(null)
   const html = useMemo(() => renderMarkdown(memo.content, tagColors), [memo.content, tagColors])
@@ -153,7 +157,8 @@ export function MemoCard({
 
   return (
     <article
-      className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}${memo.pinned ? ' is-pinned' : ''}`}
+      className={`note-card${busy ? ' busy' : ''}${menuOpen ? ' menu-open' : ''}${memo.pinned ? ' is-pinned' : ''}${rowDot ? ' has-dot' : ''}`}
+      style={rowDot ? ({ '--row-dot': rowDot } as React.CSSProperties) : undefined}
       onDoubleClick={(event) => {
         // Only the card body opens the editor; buttons, links and tag chips keep their own click.
         if ((event.target as HTMLElement).closest('button, a, input, textarea, .md-tag')) return
