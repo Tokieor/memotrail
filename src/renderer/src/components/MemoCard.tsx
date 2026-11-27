@@ -297,19 +297,6 @@ export function MemoCard({
         onEdit(memo)
       }}
     >
-      <div className="card-tools">
-        <button
-          ref={menuButton}
-          className="meta-btn"
-          title="更多"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => onMenuOpenChange(!menuOpen)}
-        >
-          <MoreIcon size={16} />
-        </button>
-      </div>
-
       {menuOpen && (
         <CardMenu
           anchor={menuButton}
@@ -349,6 +336,20 @@ export function MemoCard({
         {memo.visibility !== 'PRIVATE' && <span>· {VISIBILITY_LABEL[memo.visibility] ?? memo.visibility}</span>}
         {memo.pinned && <span className="pinned-flag">· 置顶</span>}
         {archived && <span className="archived-flag">· 已归档</span>}
+        {/* 三点菜单跟在时间行末尾、贴右下角：原来悬在右上角会压住正文，还要给正文留一条空白边距。 */}
+        <span className="spacer" />
+        <div className="card-tools">
+          <button
+            ref={menuButton}
+            className="meta-btn"
+            title="更多"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => onMenuOpenChange(!menuOpen)}
+          >
+            <MoreIcon size={16} />
+          </button>
+        </div>
       </div>
 
       {error && <p className="inline-error" style={{ marginTop: 8 }}>{error}</p>}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppConfig, Memo, TagColorKey, User } from '@shared/types'
+import type { AppConfig, Memo, MemoView, TagColorKey, User } from '@shared/types'
 import { defaultTagColor, TAG_COLORS, TAG_SORT_OPTIONS, tagColorVar, type TagSort, type TagStat } from '../lib/tags'
 import { ContributionHeatmap } from './ContributionHeatmap'
 import { MiniCalendar } from './MiniCalendar'
@@ -11,6 +11,7 @@ import {
   LogoMark,
   MoreIcon,
   NotesIcon,
+  PlusIcon,
   PencilIcon,
   PinIcon,
   SettingsIcon,
@@ -30,7 +31,12 @@ interface Props {
   tags: TagStat[]
   tagSort: TagSort
   counts: { all: number; today: number }
-  sync: { state: SyncState; label: string; detail: string }
+  sync: { state: SyncState; label: string }
+  /** 官方 Saved Views（0.31.0），从服务端读取。 */
+  views: MemoView[]
+  activeView: string | null
+  onSelectView: (name: string | null) => void
+  onManageViews: () => void
   onNavigate: (key: NavKey) => void
   onSelectTag: (tag: string | null) => void
   onTagSortChange: (sort: TagSort) => void
@@ -44,6 +50,7 @@ interface Props {
 
 export function Sidebar({
   config, user, memos, activeNav, activeTag, tags, tagSort, counts, sync,
+  views, activeView, onSelectView, onManageViews,
   onNavigate, onSelectTag, onTagSortChange, onRenameTag, onDeleteTag, onToggleTagPin,
   onOpenSettings, activeDay = null, onSelectDay
 }: Props): JSX.Element {
@@ -94,10 +101,30 @@ export function Sidebar({
       )}
 
       <nav className="nav-list">
-        <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag} onClick={() => onNavigate('all')} />
+        <NavItem icon={<NotesIcon size={18} />} label="全部笔记" count={counts.all} active={activeNav === 'all' && !activeTag && !activeView} onClick={() => onNavigate('all')} />
         <NavItem icon={<CalendarIcon size={18} />} label="今日" count={counts.today || undefined} active={activeNav === 'today' && !activeTag} onClick={() => onNavigate('today')} />
         <NavItem icon={<ArchiveIcon size={18} />} label="归档" active={activeNav === 'archive' && !activeTag} onClick={() => onNavigate('archive')} />
       </nav>
+
+      {/* 视图与标签同款：标题行 + 右侧管理按钮，下面直接平铺列表。 */}
+      <div className="section-label" style={{ marginTop: 12 }}>
+        <span>视图</span>
+        <button className="section-action views-manage" title="管理视图" onClick={onManageViews}><PlusIcon size={16} /></button>
+      </div>
+      <div className="view-nav-list">
+        {views.length === 0 && <div className="view-nav-empty">还没有视图，点右上角 + 新建</div>}
+        {views.map((view) => (
+          <button
+            key={view.name}
+            className={`view-nav-item${activeView === view.name ? ' active' : ''}`}
+            title={view.filter}
+            onClick={() => onSelectView(activeView === view.name ? null : view.name)}
+          >
+            <span className="view-nav-item-icon">{view.icon?.emoji ?? '📌'}</span>
+            <span className="label">{view.title}</span>
+          </button>
+        ))}
+      </div>
 
       <div className="section-label" style={{ marginTop: 12 }}>
         <span>标签</span>
@@ -207,14 +234,12 @@ export function Sidebar({
 
       <div className="sidebar-spacer" />
 
+      {/* 同步卡只留状态一行：服务器地址在下面用户行显示，笔记数量在「全部笔记」旁已有。 */}
       <div className="sync-card">
         <div className="sync-row">
           <span className={`status-dot${sync.state === 'error' ? ' error' : ''}${sync.state === 'syncing' ? ' syncing' : ''}`} />
           <span className={`sync-title${sync.state === 'error' ? ' error' : ''}`}>{sync.label}</span>
           <span className="sync-time">{sync.state === 'syncing' ? '···' : '刚刚'}</span>
-        </div>
-        <div className="sync-desc" title={`${serverHost} · ${counts.all} 条笔记`}>
-          {sync.detail || `${serverHost} · ${counts.all} 条笔记`}
         </div>
       </div>
 

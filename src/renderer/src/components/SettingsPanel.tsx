@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import type { AppConfig, Appearance, SidebarCard, ThemeId } from '@shared/types'
+import type { AppConfig, Appearance, SessionInfo, SidebarCard, ThemeId } from '@shared/types'
 import { describeError } from '../lib/errors'
 import { captureAccelerator, formatAccelerator } from '../lib/accelerator'
 import { applyTheme } from '../lib/theme'
 import { applyFontSize, fontSizeFromConfig, FONT_SIZE_OPTIONS } from '../lib/font-size'
-import { CheckIcon, ChevronIcon, EyeIcon, SyncIcon } from './Icons'
+import { CheckIcon, ChevronIcon, SyncIcon } from './Icons'
 
 interface Props {
   config: AppConfig
@@ -96,11 +96,19 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
   const [notice, setNotice] = useState('')
   const [launchAtLogin, setLaunchAtLogin] = useState(config.launchAtLogin)
   const [closeToTray, setCloseToTray] = useState(config.closeToTray)
-  const [showToken, setShowToken] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [wifiOnly, setWifiOnly] = useState(false)
   const [message, setMessage] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [session, setSession] = useState<SessionInfo>({ mode: config.authMode, tokenTail: null })
+
+  useEffect(() => {
+    void window.api.auth.session().then(setSession).catch(() => undefined)
+  }, [])
+
+  const byToken = session.mode === 'token'
+  // 服务器实报版本与会话适配版本不一致时给个警示，说明功能可能缺失。
+  const versionMismatch = Boolean(config.serverVersion) && config.serverVersion !== config.memosVersion
 
   const setErrorOf = (slot: 'quick' | 'main', text: string): void => {
     if (slot === 'quick') setQuickError(text)
@@ -265,24 +273,58 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
                 <div className="field-input"><span className="field-text">{config.serverUrl || '未设置'}</span></div>
               </div>
               <div className="field-group">
+                <label className="field-label">登录方式</label>
+                <div className="field-input">
+                  <span className="field-text">{byToken ? '访问令牌（PAT）' : '账号密码'}</span>
+                </div>
+                <p className="field-hint">
+                  {byToken ? '令牌长期有效，重启直接复用；被撤销或过期需重新填写' : '登录后由应用自动续期，重启免登录'}
+                </p>
+              </div>
+              <div className="field-group">
                 <label className="field-label">账号</label>
                 <div className="field-input"><span className="field-text">{config.username || '—'}</span></div>
               </div>
-              <div className="field-group">
-                <label className="field-label">访问令牌</label>
-                <div className="field-input">
-                  <span className={`field-text${showToken ? '' : ' masked'}`}>
-                    {showToken ? '已登录（令牌由主进程安全保管）' : '••••••••••••••••••••'}
-                  </span>
-                  <button className="meta-btn" onClick={() => setShowToken((v) => !v)} title={showToken ? '隐藏' : '显示'}>
-                    <EyeIcon size={16} />
-                  </button>
+              {byToken ? (
+                <div className="field-group">
+                  <label className="field-label">访问令牌</label>
+                  <div className="field-input">
+                    {/* 圆点不能带 letter-spacing，否则加宽后会把尾四位挤到省略号后面看不到。 */}
+                    <span className="field-text">••••••••••••{session.tokenTail ?? ''}</span>
+                  </div>
+                  <p className="field-hint">令牌由主进程保管，仅显示尾四位；不会随会话自动刷新</p>
                 </div>
+              ) : (
+                <div className="field-group">
+                  <label className="field-label">会话</label>
+                  <div className="field-input">
+                    <span className="field-text">短期访问令牌 · 自动续期</span>
+                  </div>
+                  <p className="field-hint">有效期较短，由刷新凭据在后台静默续期</p>
+                </div>
+              )}
+              <div className="field-group">
+                <label className="field-label">服务器版本</label>
+                <div className="field-input">
+                  <span className="field-text">{config.serverVersion || '未知'}</span>
+                  <span className={`badge${versionMismatch ? ' error' : ''}`}>
+                    {versionMismatch ? `与适配的 ${config.memosVersion} 不一致` : `适配 ${config.memosVersion}`}
+                  </span>
+                </div>
+                {versionMismatch && (
+                  <p className="field-hint">当前客户端只适配 {config.memosVersion}，其它版本的接口可能有差异</p>
+                )}
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                <span style={{ flex: 1, fontSize: 11, color: 'var(--faint)' }}>{memoCount} 条笔记 · 登录态自动恢复</span>
-                <button className="secondary-btn" onClick={() => void syncNow()} disabled={syncing}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: 'var(--faint)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {memoCount} 条笔记 · 已连接
+                </span>
+                {/* 退出登录放在服务卡底部：和「立即同步」并列，都是对当前连接的操作。 */}
+                <button className="secondary-btn" style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }} onClick={onSignOut}>
+                  退出登录
+                </button>
+                <button className="secondary-btn" style={{ flex: '0 0 auto', whiteSpace: 'nowrap' }} onClick={() => void syncNow()} disabled={syncing}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <SyncIcon size={13} />{syncing ? '同步中…' : '立即同步'}
                   </span>
@@ -465,9 +507,8 @@ export function SettingsPanel({ config, memoCount, onConfigChange, onSignOut, on
             <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
               MemoTrail · Memos Desktop<br />
               一个简洁、轻量的 Memos 第三方桌面客户端。<br />
-              版本 0.1.0 · Electron + React 18
+              版本 0.1.0 · Electron + React 18 · 适配 Memos {config.memosVersion}
             </p>
-            <button className="secondary-btn" style={{ marginTop: 12 }} onClick={onSignOut}>退出登录</button>
           </div>
         )}
       </div>

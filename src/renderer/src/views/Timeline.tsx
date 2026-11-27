@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AppConfig, Memo, MemoState, TagColorKey, TagMetaMap, User } from '@shared/types'
+import type { AppConfig, Memo, MemoState, MemoView, TagColorKey, TagMetaMap, User } from '@shared/types'
 import { Composer } from '../components/Composer'
 import { MemoCard } from '../components/MemoCard'
 import { visibleLength } from '../lib/text'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { Sidebar } from '../components/Sidebar'
+import { ViewManager } from '../components/ViewManager'
 import type { NavKey, SyncState } from '../components/Sidebar'
 import { describeError } from '../lib/errors'
 import { formatAccelerator } from '../lib/accelerator'
@@ -16,6 +17,7 @@ import {
   ArrowUpIcon,
   BackIcon,
   CardViewIcon,
+  CloseIcon,
   ListViewIcon,
   MoreIcon,
   PinIcon,
@@ -53,7 +55,7 @@ function dayRange(day: string): { start: string; end: string } {
 }
 
 /** Builds the CEL expression Memos 0.31.0 expects in `?filter=`. */
-export function buildFilter(query: string, tag: string | null, day?: string | null): string | undefined {
+export function buildFilter(query: string, tag: string | null, day?: string | null, viewFilter?: string): string | undefined {
   const parts: string[] = []
   if (query.trim()) parts.push(`content.contains(${JSON.stringify(query.trim())})`)
   if (tag) parts.push(`${JSON.stringify(tag)} in tags`)
@@ -61,6 +63,8 @@ export function buildFilter(query: string, tag: string | null, day?: string | nu
     const { start, end } = dayRange(day)
     parts.push(`created_ts >= timestamp("${start}") && created_ts < timestamp("${end}")`)
   }
+  // 视图表达式本身可能带 ||，必须括起来再和搜索/标签做 AND，否则优先级会改变语义。
+  if (viewFilter?.trim()) parts.push(`(${viewFilter.trim()})`)
   return parts.length > 0 ? parts.join(' && ') : undefined
 }
 
@@ -88,6 +92,20 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   const loadedNav = useRef<NavKey | null>(null)
   const [showToTop, setShowToTop] = useState(false)
 
+  // 官方 Saved Views：列表存在服务端，当前选中的视图只是本地 UI 状态。
+  const [views, setViews] = useState<MemoView[]>([])
+  const [activeView, setActiveView] = useState<string | null>(null)
+  const [viewManagerOpen, setViewManagerOpen] = useState(false)
+  const activeViewDef = views.find((item) => item.name === activeView)
+  const activeFilter = activeViewDef?.filter
+
+  const reloadViews = useCallback(async () => {
+    const result = await window.api.views.list()
+    if (result.success && result.data) setViews(result.data)
+  }, [])
+
+  useEffect(() => { void reloadViews() }, [reloadViews])
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300)
     return () => clearTimeout(timer)
@@ -96,7 +114,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   // Navigating, filtering or switching views discards the open menu so it can never reappear.
   useEffect(() => {
     setOpenMenu(null)
-  }, [nav, debouncedQuery, tag, day, view, listMode, editing])
+  }, [nav, debouncedQuery, tag, day, activeView, view, listMode, editing])
 
   const load = useCallback(
     async (reset: boolean, options?: { silent?: boolean }) => {
@@ -109,7 +127,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       // 归档 is a server-side bucket: the same list endpoint, a different `state`.
       const result = await window.api.memos.list({
         pageSize: 50,
-        filter: buildFilter(debouncedQuery, effectiveTag, day),
+        filter: buildFilter(debouncedQuery, effectiveTag, day, activeFilter),
         state: nav === 'archive' ? 'ARCHIVED' : 'NORMAL',
         pageToken: reset ? undefined : nextPageToken
       })
@@ -126,7 +144,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       }
       setLoading(false)
     },
-    [nav, debouncedQuery, tag, day, nextPageToken]
+    [nav, debouncedQuery, tag, day, activeFilter, nextPageToken]
   )
 
   useEffect(() => {
@@ -135,7 +153,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     feedRef.current?.scrollTo({ top: 0 })
     setShowToTop(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav, debouncedQuery, tag, day])
+  }, [nav, debouncedQuery, tag, day, activeFilter])
 
   // Scroll fires far more often than the browser paints; keep the state update to one per frame.
   const scrollFrame = useRef(0)
@@ -211,9 +229,9 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   // 归档笔记不算进标签计数，否则点进标签看到的条数会比侧栏少。
   const [tagStats, setTagStats] = useState<TagStat[]>([])
   useEffect(() => {
-    if (tag || debouncedQuery) return
+    if (tag || debouncedQuery || activeView) return
     setTagStats(collectTagStats(feedMemos))
-  }, [feedMemos, tag, debouncedQuery])
+  }, [feedMemos, tag, debouncedQuery, activeView])
 
   const [tagMeta, setTagMeta] = useState<TagMetaMap>(config.tagMeta ?? {})
   useEffect(() => {
@@ -371,11 +389,22 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     setMemos((current) => current.filter((item) => item.name !== name))
   }
 
+  /** 选中已保存的视图：它自己就是一层筛选，和标签/日期互斥，搜索仍可叠加。 */
+  function selectView(name: string | null): void {
+    setView('feed')
+    setEditing(null)
+    setNav('all')
+    setTag(null)
+    setDay(null)
+    setActiveView(name)
+  }
+
   function navigate(key: NavKey): void {
     setView('feed')
     setEditing(null)
     setTag(null)
     setDay(null)
+    setActiveView(null)
     setNav(key)
   }
 
@@ -384,6 +413,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     setEditing(null)
     setNav('all')
     setDay(null)
+    setActiveView(null)
     setTag(next)
   }
 
@@ -393,11 +423,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
     setEditing(null)
     setTag(null)
     setNav('all')
+    setActiveView(null)
     setDay((current) => (current === next ? null : next))
   }
 
   const syncLabel = syncState === 'error' ? '同步失败' : syncState === 'syncing' ? '同步中' : '已同步'
-  const serverHost = config.serverUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')
 
   const viewTitle = day
     ? `${Number(day.slice(5, 7))}月${Number(day.slice(8, 10))}日`
@@ -432,7 +462,11 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         tags={tags}
         tagSort={tagSort}
         counts={counts}
-        sync={{ state: syncState, label: syncLabel, detail: `${serverHost} · ${counts.all} 条笔记` }}
+        sync={{ state: syncState, label: syncLabel }}
+        views={views}
+        activeView={activeView}
+        onSelectView={selectView}
+        onManageViews={() => setViewManagerOpen(true)}
         onNavigate={navigate}
         onSelectTag={selectTag}
         onTagSortChange={changeTagSort}
@@ -514,7 +548,15 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
           <>
             <header className="topbar feed-topbar">
               <div>
-                <h1>{viewTitle}</h1>
+                <h1>
+                  {viewTitle}
+                  {activeViewDef && (
+                    <span className="active-view-chip">
+                      视图 · {activeViewDef.icon?.emoji ?? '📌'} {activeViewDef.title}
+                      <button title="清除视图筛选" onClick={() => selectView(null)}><CloseIcon size={12} /></button>
+                    </span>
+                  )}
+                </h1>
                 <p className="subtitle">
                   {day
                     ? `共 ${visibleMemos.length} 条 · 再点一次日期可取消筛选`
@@ -623,6 +665,17 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
           </>
         )}
       </div>
+
+      {viewManagerOpen && (
+        <ViewManager
+          views={views}
+          tagNames={tagStats.map((item) => item.name)}
+          activeView={activeView}
+          onClose={() => setViewManagerOpen(false)}
+          onRefresh={reloadViews}
+          onApply={selectView}
+        />
+      )}
     </div>
   )
 

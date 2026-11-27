@@ -1,17 +1,30 @@
 import { net } from 'electron'
-import type { ApiResult, ListMemosOptions, Memo, MemoList, MemoState, User, Visibility } from '../../shared/types'
+import type {
+  ApiResult,
+  ListMemosOptions,
+  Memo,
+  MemoList,
+  MemoState,
+  MemoView,
+  SignInResult,
+  User,
+  ViewDraft,
+  Visibility
+} from '../../shared/types'
 
 // The Memos 0.31.0 HTTP API (grpc-gateway, see proto/api/v1/*_service.proto):
 //   POST /api/v1/auth/signin   { passwordCredentials: { username, password } } -> { user, accessToken, ... }
 //   POST /api/v1/auth/refresh  rotates the refresh cookie, returns a new access token
-//   GET  /api/v1/auth/me       -> { user }
+//   GET  /api/v1/auth/me       -> { user }   (also the validity probe for a personal access token)
+//   GET  /api/v1/instance/profile -> { version, admin, ... }
 //   GET  /api/v1/memos         ?pageSize=&pageToken=&filter=&state=   (filter is CEL)
 //   POST /api/v1/memos         body is the Memo (content, visibility)
 //
 // Everything hangs off /api/v1 on 0.31.0; the unprefixed /api/... routes answer 404.
 //
-// The refresh token lives in an HttpOnly cookie; Electron's session keeps it on disk, so the
-// app stays signed in across restarts and only the short-lived access token is memory-only.
+// Two ways in, both ending at the same `Authorization: Bearer …` header:
+// - password: short-lived access token in memory, refreshed through an HttpOnly-style cookie.
+// - personal access token: the token is the bearer credential itself and never expires by itself.
 
 const API_ROOT = '/api/v1'
 
@@ -100,7 +113,7 @@ function errorMessage(body: string, status: number): string {
   return body.slice(0, 300) || `HTTP ${status}`
 }
 
-export async function signIn(serverUrl: string, username: string, password: string): Promise<ApiResult<User>> {
+export async function signIn(serverUrl: string, username: string, password: string): Promise<ApiResult<SignInResult>> {
   setBaseUrl(serverUrl)
   accessToken = null
   const result = await call<{ user: User; accessToken: string; accessTokenExpiresAt?: string }>(
@@ -110,7 +123,44 @@ export async function signIn(serverUrl: string, username: string, password: stri
   )
   if (!result.success) return result
   accessToken = result.data.accessToken
-  return { success: true, data: result.data.user }
+  return { success: true, data: { user: result.data.user, serverVersion: await serverVersion() } }
+}
+
+/**
+ * Personal access token (PAT) sign-in: the token itself is the bearer credential, so there is no
+ * exchange step — one authenticated call tells us whether it is accepted and who owns it.
+ * `adoptToken` is separate so a restored session can reuse it without re-running the probe.
+ */
+export function adoptToken(token: string): void {
+  accessToken = token
+}
+
+export async function signInWithToken(serverUrl: string, token: string): Promise<ApiResult<SignInResult>> {
+  setBaseUrl(serverUrl)
+  const previous = accessToken
+  accessToken = token.trim()
+  const me = await currentUser()
+  if (!me.success) {
+    accessToken = previous
+    return me
+  }
+  return { success: true, data: { user: me.data, serverVersion: await serverVersion() } }
+}
+
+/**
+ * `GET /api/v1/instance/profile` reports the running server version. It is only a hint — some
+ * builds hide it — so an empty string means "unknown", never a failure.
+ */
+export async function serverVersion(): Promise<string> {
+  const result = await call<{ version?: string }>('/instance/profile', { method: 'GET' }, false)
+  if (!result.success) return ''
+  return typeof result.data?.version === 'string' ? result.data.version : ''
+}
+
+/** Last four characters of the active personal access token, for the settings page. */
+export function tokenTail(): string | null {
+  if (!accessToken || accessToken.length < 4) return null
+  return accessToken.slice(-4)
 }
 
 export async function refresh(): Promise<ApiResult<void>> {
@@ -226,6 +276,52 @@ export async function updateMemo(name: string, patch: MemoPatch): Promise<ApiRes
 
 export async function deleteMemo(name: string): Promise<ApiResult<void>> {
   return call<void>(`/${name}`, { method: 'DELETE' })
+}
+
+// ---- Saved Views (0.31.0 UserService) ------------------------------------
+// GET    /api/v1/users/{user}/views
+// POST   /api/v1/users/{user}/views       body is the MemoView itself (flat)
+// PATCH  /api/v1/users/{user}/views/{id}?updateMask=title,filter,icon
+// DELETE /api/v1/users/{user}/views/{id}
+// The returned `filter` is the same CEL expression ListMemos accepts.
+
+async function viewsPath(): Promise<ApiResult<string>> {
+  const me = await currentUser()
+  if (!me.success) return me
+  return { success: true, data: `/${me.data.name}/views` }
+}
+
+export async function listViews(): Promise<ApiResult<MemoView[]>> {
+  const path = await viewsPath()
+  if (!path.success) return path
+  const result = await call<{ memoViews?: MemoView[] }>(path.data, { method: 'GET' })
+  if (!result.success) return result
+  return { success: true, data: result.data.memoViews ?? [] }
+}
+
+export async function createView(draft: ViewDraft): Promise<ApiResult<MemoView>> {
+  const path = await viewsPath()
+  if (!path.success) return path
+  return call<MemoView>(path.data, { method: 'POST', body: JSON.stringify(draft) })
+}
+
+export async function updateView(view: MemoView): Promise<ApiResult<MemoView>> {
+  const mask = view.icon ? 'title,filter,icon' : 'title,filter'
+  const body: ViewDraft = { title: view.title, filter: view.filter }
+  if (view.icon) body.icon = view.icon
+  return call<MemoView>(`/${view.name}?updateMask=${mask}`, { method: 'PATCH', body: JSON.stringify(body) })
+}
+
+export async function deleteView(name: string): Promise<ApiResult<void>> {
+  return call<void>(`/${name}`, { method: 'DELETE' })
+}
+
+/** 用一次 pageSize=1 的真实查询让服务端编译表达式，拿到它的原始报错。 */
+export async function validateViewFilter(filter: string): Promise<ApiResult<void>> {
+  if (!filter.trim()) return { success: false, error: '筛选表达式为空' }
+  const result = await listMemos({ filter, pageSize: 1 })
+  if (!result.success) return { success: false, error: result.error, status: result.status }
+  return { success: true, data: undefined }
 }
 
 export function signOut(): void {

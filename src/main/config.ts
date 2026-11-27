@@ -1,11 +1,14 @@
 import { app } from 'electron'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { AppConfig, TagColorKey, TagMetaEntry, TagMetaMap } from '../shared/types'
+import type { AppConfig, MemosVersion, TagColorKey, TagMetaEntry, TagMetaMap } from '../shared/types'
 
 const DEFAULTS: AppConfig = {
   serverUrl: '',
   username: '',
+  authMode: 'password',
+  memosVersion: '0.31.0',
+  serverVersion: '',
   quickHotkey: 'CommandOrControl+Shift+M',
   mainHotkey: 'CommandOrControl+Shift+O',
   closeToTray: false,
@@ -18,6 +21,9 @@ const DEFAULTS: AppConfig = {
 }
 
 const TAG_COLORS: TagColorKey[] = ['tone-1', 'tone-2', 'tone-3', 'tone-4']
+
+/** Versions the client is known to work against; keep in sync with the sign-in picker. */
+const SUPPORTED_VERSIONS: MemosVersion[] = ['0.31.0']
 
 /** Keeps whatever the renderer (or a hand-edited file) wrote within the shape we understand. */
 function sanitizeTagMeta(raw: unknown): TagMetaMap {
@@ -78,6 +84,8 @@ interface StoredConfig extends AppConfig {
   windowState?: WindowState
   /** base64 of the OS-encrypted `memos_refresh` cookie; never handed to the renderer. */
   refreshToken?: string
+  /** base64 of a personal access token, only present when `authMode === 'token'`. */
+  accessToken?: string
 }
 
 let cached: StoredConfig | null = null
@@ -98,6 +106,12 @@ function read(): StoredConfig {
     cached = {
       serverUrl: typeof raw.serverUrl === 'string' ? raw.serverUrl.replace(/\/+$/, '') : DEFAULTS.serverUrl,
       username: typeof raw.username === 'string' ? raw.username : DEFAULTS.username,
+      // 登录方式与版本都只接受客户端认识的取值，手改配置时回落到默认。
+      authMode: raw.authMode === 'token' ? 'token' : 'password',
+      memosVersion: SUPPORTED_VERSIONS.includes(raw.memosVersion as MemosVersion)
+        ? (raw.memosVersion as MemosVersion)
+        : DEFAULTS.memosVersion,
+      serverVersion: typeof raw.serverVersion === 'string' ? raw.serverVersion : DEFAULTS.serverVersion,
       quickHotkey: typeof raw.quickHotkey === 'string' && raw.quickHotkey ? raw.quickHotkey : DEFAULTS.quickHotkey,
       mainHotkey: typeof raw.mainHotkey === 'string' && raw.mainHotkey ? raw.mainHotkey : DEFAULTS.mainHotkey,
       closeToTray: raw.closeToTray === true,
@@ -111,6 +125,7 @@ function read(): StoredConfig {
         : DEFAULTS.fontSize,
       tagMeta: sanitizeTagMeta(raw.tagMeta),
       ...(typeof raw.refreshToken === 'string' && raw.refreshToken ? { refreshToken: raw.refreshToken } : {}),
+      ...(typeof raw.accessToken === 'string' && raw.accessToken ? { accessToken: raw.accessToken } : {}),
       ...(raw.windowState && typeof raw.windowState.width === 'number' && typeof raw.windowState.height === 'number'
         ? { windowState: { width: raw.windowState.width, height: raw.windowState.height } }
         : {})
@@ -136,7 +151,7 @@ function write(next: StoredConfig): void {
 
 /** The renderer only ever sees the non-secret part of the config. */
 export function loadConfig(): AppConfig {
-  const { refreshToken: _secret, windowState: _window, ...publicPart } = read()
+  const { refreshToken: _secret, accessToken: _pat, windowState: _window, ...publicPart } = read()
   return publicPart
 }
 
@@ -173,6 +188,27 @@ export function saveRefreshToken(token: string | null): void {
   const next: StoredConfig = { ...read() }
   if (!token) delete next.refreshToken
   else next.refreshToken = Buffer.from(token, 'utf-8').toString('base64')
+  write(next)
+}
+
+/**
+ * A personal access token has no refresh cycle: it stays valid until it is revoked on the server,
+ * so it is stored as-is (base64, mode 0600) and replayed on every request.
+ */
+export function loadAccessToken(): string | null {
+  const stored = read().accessToken
+  if (!stored) return null
+  try {
+    return Buffer.from(stored, 'base64').toString('utf-8') || null
+  } catch {
+    return null
+  }
+}
+
+export function saveAccessToken(token: string | null): void {
+  const next: StoredConfig = { ...read() }
+  if (!token) delete next.accessToken
+  else next.accessToken = Buffer.from(token, 'utf-8').toString('base64')
   write(next)
 }
 

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
-import { loadConfig, saveConfig } from './config'
+import { loadConfig, saveAccessToken, saveConfig, saveRefreshToken } from './config'
 import * as memos from './memos/client'
-import type { AppConfig, ListMemosOptions, QuickCapturePayload, Visibility } from '../shared/types'
+import type { AppConfig, ListMemosOptions, MemoView, MemosVersion, QuickCapturePayload, SessionInfo, ViewDraft, Visibility } from '../shared/types'
 import { broadcast, getMainWindow, hideQuickWindow, showMainWindow, showQuickWindow } from './windows'
 import { probeAccelerator, registerMainHotkey, registerQuickHotkey, resumeHotkeys, sameAccelerator, suspendHotkeys, type HotkeySlot } from './hotkeys'
 
@@ -87,17 +87,51 @@ export function registerIpc(): void {
   // 录制时挂起自家快捷键，录完立刻恢复（见 hotkeys.ts 里的说明）。
   handle('hotkey:suspend', () => suspendHotkeys())
   handle('hotkey:resume', () => resumeHotkeys())
-  handle('auth:signin', async (serverUrl: string, username: string, password: string) => {
+  handle('auth:signin', async (serverUrl: string, username: string, password: string, memosVersion: MemosVersion) => {
     const result = await memos.signIn(serverUrl, username, password)
-    if (result.success) saveConfig({ serverUrl, username })
+    if (result.success) {
+      // 密码登录拿到的是短期 access token + 可续期的 refresh cookie，PAT 要清掉以免混用。
+      saveAccessToken(null)
+      saveConfig({
+        serverUrl,
+        username,
+        authMode: 'password',
+        memosVersion,
+        serverVersion: result.data.serverVersion
+      })
+    }
+    return result
+  })
+  handle('auth:signin-token', async (serverUrl: string, token: string, memosVersion: MemosVersion) => {
+    const result = await memos.signInWithToken(serverUrl, token)
+    if (result.success) {
+      // 令牌登录没有续期机制：令牌本身长期有效，持久化后重启直接复用。
+      saveRefreshToken(null)
+      saveAccessToken(token.trim())
+      saveConfig({
+        serverUrl,
+        username: result.data.user.username,
+        authMode: 'token',
+        memosVersion,
+        serverVersion: result.data.serverVersion
+      })
+    }
     return result
   })
   handle('auth:status', async () => {
     if (!memos.hasSession()) return { success: true as const, data: null }
     return memos.currentUser()
   })
+  // 设置页要按登录方式给出不同说明，但不该看到令牌本体，只回尾四位。
+  handle('auth:session', (): SessionInfo => {
+    const mode = loadConfig().authMode
+    return { mode, tokenTail: mode === 'token' ? memos.tokenTail() : null }
+  })
   handle('auth:signout', () => {
     memos.signOut()
+    // 两种凭证都要清：换账号时残留的另一个会让下次启动用错身份。
+    saveRefreshToken(null)
+    saveAccessToken(null)
     return { success: true as const, data: undefined }
   })
 
@@ -120,6 +154,17 @@ export function registerIpc(): void {
     if (result.success) broadcastChange()
     return result
   })
+
+  // 视图是服务端保存的 CEL 筛选，增删改都走官方 UserService。
+  handle('views:list', () => memos.listViews())
+  handle('views:create', (draft: ViewDraft) => memos.createView(draft))
+  handle('views:update', (view: MemoView) => memos.updateView(view))
+  handle('views:delete', async (name: string) => {
+    const result = await memos.deleteView(name)
+    if (result.success) broadcast('views:changed')
+    return result
+  })
+  handle('views:validate', (filter: string) => memos.validateViewFilter(filter))
 
   handle('quick:capture', async (payload: QuickCapturePayload) => {
     const result = await memos.createMemo(payload.content, payload.visibility)

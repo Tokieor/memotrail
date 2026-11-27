@@ -1,5 +1,19 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, ListMemosOptions, Memo, MemoList, MemoState, QuickCapturePayload, User, Visibility } from '../shared/types'
+import type {
+  AppConfig,
+  ListMemosOptions,
+  Memo,
+  MemoList,
+  MemoState,
+  MemoView,
+  MemosVersion,
+  QuickCapturePayload,
+  SessionInfo,
+  SignInResult,
+  User,
+  ViewDraft,
+  Visibility
+} from '../shared/types'
 
 const api = {
   /** Host OS, used by the renderer to adapt layout (macOS traffic lights need top inset). */
@@ -38,8 +52,18 @@ const api = {
     suspend: () => ipcRenderer.invoke('hotkey:suspend'),
     resume: () => ipcRenderer.invoke('hotkey:resume')
   },
-  auth: {    signIn: (serverUrl: string, username: string, password: string) =>
-      ipcRenderer.invoke('auth:signin', serverUrl, username, password),
+  auth: {
+    signIn: (serverUrl: string, username: string, password: string, memosVersion: MemosVersion) =>
+      ipcRenderer.invoke('auth:signin', serverUrl, username, password, memosVersion) as Promise<
+        { success: true; data: SignInResult } | { success: false; error: string; status?: number }
+      >,
+    /** 个人访问令牌登录；令牌经由主进程保管，模型层拿不到。 */
+    signInWithToken: (serverUrl: string, token: string, memosVersion: MemosVersion) =>
+      ipcRenderer.invoke('auth:signin-token', serverUrl, token, memosVersion) as Promise<
+        { success: true; data: SignInResult } | { success: false; error: string; status?: number }
+      >,
+    /** 当前登录方式与令牌尾号，仅用于设置页展示。 */
+    session: () => ipcRenderer.invoke('auth:session') as Promise<SessionInfo>,
     status: () => ipcRenderer.invoke('auth:status') as Promise<{ success: boolean; data?: User | null; error?: string }>,
     signOut: () => ipcRenderer.invoke('auth:signout')
   },
@@ -57,6 +81,15 @@ const api = {
       }
     },
     remove: (name: string) => ipcRenderer.invoke('memos:delete', name) as Promise<{ success: boolean; error?: string }>
+  },
+  /** 0.31.0 Saved Views：表达式由服务端 CEL 编译，列表/筛选结果用 memos.list 读取。 */
+  views: {
+    list: () => ipcRenderer.invoke('views:list') as Promise<{ success: boolean; data?: MemoView[]; error?: string }>,
+    create: (draft: ViewDraft) => ipcRenderer.invoke('views:create', draft) as Promise<{ success: boolean; data?: MemoView; error?: string }>,
+    update: (view: MemoView) => ipcRenderer.invoke('views:update', view) as Promise<{ success: boolean; data?: MemoView; error?: string }>,
+    remove: (name: string) => ipcRenderer.invoke('views:delete', name) as Promise<{ success: boolean; error?: string }>,
+    /** 保存前让服务端编译一次表达式，拿到可读的错误信息。 */
+    validate: (filter: string) => ipcRenderer.invoke('views:validate', filter) as Promise<{ success: boolean; error?: string }>
   },
   attachments: {
     upload: (payload: { filename: string; type: string; data: string }) =>

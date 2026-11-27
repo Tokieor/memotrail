@@ -129,6 +129,60 @@ function selectRange(range: Range): void {
   selection.addRange(range)
 }
 
+/** Collapsed caret inside the WYSIWYG surface — null when focus is elsewhere. */
+function previewCaret(root: HTMLElement): Range | null {
+  const selection = window.getSelection()
+  if (!selection || !selection.isCollapsed || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  return root.contains(range.startContainer) ? range : null
+}
+
+/** Visible text before the caret; `#tag` detection reuses the source mode helper. */
+function textBeforeCaret(root: HTMLElement, caret: Range): string {
+  const range = document.createRange()
+  range.selectNodeContents(root)
+  range.setEnd(caret.startContainer, caret.startOffset)
+  return range.toString()
+}
+
+/** Text node holding the character at `index` of the surface's flattened text. */
+function textNodeAt(root: HTMLElement, index: number): { node: Text; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let seen = 0
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text
+    if (seen + text.data.length > index) return { node: text, offset: index - seen }
+    seen += text.data.length
+  }
+  return null
+}
+
+/** Caret coordinates relative to the composer input, for anchoring the suggest popup. */
+function previewCaretPoint(root: HTMLElement, caret: Range): CaretPoint {
+  const host = root.parentElement ?? root
+  const hostRect = host.getBoundingClientRect()
+  let rect = caret.getClientRects()[0]
+  if (!rect && caret.startContainer.nodeType === Node.TEXT_NODE) {
+    const text = caret.startContainer as Text
+    const probe = document.createRange()
+    probe.setStart(text, Math.max(0, caret.startOffset - 1))
+    probe.setEnd(text, Math.min(text.data.length, caret.startOffset + 1))
+    rect = probe.getClientRects()[0] ?? undefined
+  }
+  if (!rect) {
+    rect = caret.startContainer.nodeType === Node.ELEMENT_NODE
+      ? (caret.startContainer as Element).getBoundingClientRect()
+      : hostRect
+  }
+  const style = window.getComputedStyle(root)
+  return {
+    left: Math.max(0, rect.left - hostRect.left),
+    top: Math.max(0, rect.top - hostRect.top),
+    lineHeight: Number.parseFloat(style.lineHeight) || 24,
+    height: host.clientHeight
+  }
+}
+
 /**
  * Images are found in source order, so the strip below the editor always mirrors what will be
  * published — posting keeps the order and removing one entry only deletes its own token.
@@ -358,9 +412,10 @@ export function Composer({
       clearStrayStyles(el)
     }
     setContent(sourceFrom(el))
+    syncPreviewSuggest(el)
   }
 
-  /** Opens the tag menu anchored under the `#` the caret is sitting on (source mode only). */
+  /** Opens the tag menu under the `#` in the source textarea. */
   function syncSuggest(value: string, caret: number): void {
     const element = ref.current
     const query = findTagQuery(value, caret)
@@ -376,7 +431,73 @@ export function Composer({
     }))
   }
 
+  /** Same autocomplete for the WYSIWYG surface: read the visible text up to the DOM caret. */
+  function syncPreviewSuggest(el: HTMLDivElement): void {
+    const caret = previewCaret(el)
+    if (!caret) {
+      setSuggest(null)
+      return
+    }
+    const before = textBeforeCaret(el, caret)
+    const query = findTagQuery(before, before.length)
+    if (!query) {
+      setSuggest(null)
+      return
+    }
+    setSuggest((prev) => ({
+      ...query,
+      index: prev && prev.start === query.start ? Math.min(prev.index, 7) : 0,
+      point: previewCaretPoint(el, caret)
+    }))
+  }
+
+  /** Inserts `#` as plain text in preview mode — Markdown rendering would turn it into an empty heading. */
+  function insertPreviewTag(): void {
+    const el = previewRef.current
+    if (!el) return
+    el.focus()
+    escapeTrailingMark(el)
+    document.execCommand('insertText', false, '#')
+    const caret = previewCaret(el)
+    if (!caret || tagSuggestions.length === 0) return
+    // The button must open the menu even right after another tag (no whitespace before `#`),
+    // which the typing-triggered word-boundary rule would reject.
+    setSuggest({
+      start: Math.max(0, textBeforeCaret(el, caret).length - 1),
+      query: '',
+      index: 0,
+      point: previewCaretPoint(el, caret)
+    })
+  }
+
+  /** Preview-mode completion: replace the `#query` run with a rendered tag and put the caret after it. */
+  function applyPreviewTag(tag: string): void {
+    const el = previewRef.current
+    if (!suggest || !el) return
+    const anchor = textNodeAt(el, suggest.start)
+    const selection = window.getSelection()
+    if (!anchor || !selection || selection.rangeCount === 0) return
+    const caret = selection.getRangeAt(0)
+    if (!el.contains(caret.startContainer)) return
+    const range = document.createRange()
+    range.setStart(anchor.node, anchor.offset)
+    range.setEnd(caret.startContainer, caret.startOffset)
+    range.deleteContents()
+    const node = document.createTextNode(`#${tag} `)
+    range.insertNode(node)
+    const after = document.createRange()
+    after.setStart(node, node.data.length)
+    after.collapse(true)
+    selectRange(after)
+    setSuggest(null)
+    setContent(sourceFrom(el))
+  }
+
   function applyTag(tag: string): void {
+    if (mode === 'preview') {
+      applyPreviewTag(tag)
+      return
+    }
     const element = ref.current
     if (!suggest || !element) return
     const caret = element.selectionStart
@@ -1265,6 +1386,24 @@ export function Composer({
             onCompositionStart={beginComposition}
             onCompositionEnd={finishComposition}
             onKeyDown={(e) => {
+              if (suggest && options.length > 0) {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  const step = e.key === 'ArrowDown' ? 1 : -1
+                  setSuggest((prev) => prev && { ...prev, index: (prev.index + step + options.length) % options.length })
+                  return
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  e.preventDefault()
+                  applyTag(options[Math.min(suggest.index, options.length - 1)])
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setSuggest(null)
+                  return
+                }
+              }
               if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 if (handleQuoteEnter(e)) return
                 if (handleTrailingEnter(e)) return
@@ -1342,10 +1481,11 @@ export function Composer({
           </div>
         )}
 
-        {suggest && mode === 'source' && options.length > 0 && (() => {
+        {suggest && options.length > 0 && (() => {
           const { point } = suggest
           const boxWidth = 200
-          const maxLeft = Math.max(4, (ref.current?.clientWidth ?? boxWidth) - boxWidth)
+          const surfaceWidth = (mode === 'source' ? ref.current : previewRef.current)?.clientWidth ?? boxWidth
+          const maxLeft = Math.max(4, surfaceWidth - boxWidth)
           const left = Math.max(4, Math.min(point.left, maxLeft))
           const flipUp = point.top > point.height * 0.55
           const placement = flipUp
@@ -1404,18 +1544,19 @@ export function Composer({
       )}
 
       <div className="md-toolbar" role="toolbar" aria-label="Markdown 格式">
-        <button type="button" className="md-btn md-bold" title="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
-        <button type="button" className="md-btn md-italic" title="斜体 *文字*" data-tip="斜体" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
-        <button type="button" className="md-btn md-strike" title="删除线 ~~文字~~" data-tip="删除线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
-        <button type="button" className="md-btn md-underline" title="下划线 <u>文字</u>" data-tip="下划线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
+        {/* 提示只留 CSS 气泡（data-tip）；原生 title 会同时弹一个系统气泡，用 aria-label 替代。 */}
+        <button type="button" className="md-btn md-bold" aria-label="加粗 **文字**" data-tip="加粗" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('bold')}>B</button>
+        <button type="button" className="md-btn md-italic" aria-label="斜体 *文字*" data-tip="斜体" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('italic')}>I</button>
+        <button type="button" className="md-btn md-strike" aria-label="删除线 ~~文字~~" data-tip="删除线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('strike')}>S</button>
+        <button type="button" className="md-btn md-underline" aria-label="下划线 <u>文字</u>" data-tip="下划线" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('underline')}>U</button>
         <span className="md-sep" />
-        <button type="button" className="md-btn" title="标题 ##" data-tip="标题" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
-        <button type="button" className="md-btn" title="列表 -" data-tip="列表" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
-        <button type="button" className="md-btn" title="引用 >" data-tip="引用" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="标题 ##" data-tip="标题" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('heading')}><HeadingIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="列表 -" data-tip="列表" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('list')}><ListIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="引用 >" data-tip="引用" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('quote')}><QuoteIcon size={15} /></button>
         <span className="md-sep" />
-        <button type="button" className="md-btn" title="行内代码 `文字`" data-tip="行内代码" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
-        <button type="button" className="md-btn" title="代码块" data-tip="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
-        <button type="button" className="md-btn" title="链接 [文字](url)" data-tip="链接" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="行内代码 `文字`" data-tip="行内代码" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('code')}><CodeIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="代码块" data-tip="代码块" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('codeblock')}><CodeBlockIcon size={15} /></button>
+        <button type="button" className="md-btn" aria-label="链接 [文字](url)" data-tip="链接" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormat('link')}><LinkIcon size={15} /></button>
       </div>
 
       {error && <p className="inline-error" style={{ margin: '4px 0 6px' }}>{error}</p>}
@@ -1426,9 +1567,10 @@ export function Composer({
         <VisibilityPicker value={visibility} onChange={setVisibility} />
         <button
           className="tool-btn plain"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             if (mode === 'preview') {
-              insertAtCursor('#')
+              insertPreviewTag()
             } else {
               const position = ref.current?.selectionStart ?? content.length
               insertAtCursor('#')
@@ -1438,11 +1580,11 @@ export function Composer({
               }
             }
           }}
-          title="插入标签 #" data-tip="插入标签"
+          aria-label="插入标签 #" data-tip="插入标签"
         >
           <span style={{ fontSize: 15, lineHeight: 1 }}>#</span>
         </button>
-        <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} title="添加图片/附件" data-tip="添加图片">
+        <button className="tool-btn plain" onClick={() => fileInput.current?.click()} disabled={uploading} aria-label="添加图片/附件" data-tip="添加图片">
           <ImageIcon size={17} />
         </button>
         <input
@@ -1455,19 +1597,14 @@ export function Composer({
             e.target.value = ''
           }}
         />
+        {/* 单个按钮来回切换：图标和气泡都表示当前模式，点击切到另一边。 */}
         <button
-          className={`tool-btn plain${mode === 'preview' ? ' active' : ''}`}
-          onClick={() => switchMode('preview')}
-          title="预览（所见即所得）" data-tip="预览"
+          className="tool-btn plain"
+          onClick={() => switchMode(mode === 'preview' ? 'source' : 'preview')}
+          aria-label={mode === 'preview' ? '预览（所见即所得）' : '源代码（Markdown）'}
+          data-tip={mode === 'preview' ? '预览' : '源代码'}
         >
-          <EyeIcon size={17} />
-        </button>
-        <button
-          className={`tool-btn plain${mode === 'source' ? ' active' : ''}`}
-          onClick={() => switchMode('source')}
-          title="源代码（Markdown）" data-tip="源代码"
-        >
-          <CodeIcon size={17} />
+          {mode === 'preview' ? <EyeIcon size={17} /> : <CodeIcon size={17} />}
         </button>
         <span className="spacer" />
         <span className="quick-hint">

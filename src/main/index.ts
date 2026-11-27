@@ -1,5 +1,5 @@
 import { app, Menu } from 'electron'
-import { clearLegacyArchived, loadConfig, loadRefreshToken, readLegacyArchived, saveConfig, saveRefreshToken } from './config'
+import { clearLegacyArchived, loadAccessToken, loadConfig, loadRefreshToken, readLegacyArchived, saveConfig, saveRefreshToken } from './config'
 import { registerMainHotkey, registerQuickHotkey, resumeHotkeys, unregisterHotkeys } from './hotkeys'
 import { registerIpc } from './ipc'
 import * as memos from './memos/client'
@@ -76,31 +76,50 @@ if (!app.requestSingleInstanceLock()) {
     win.on('close', () => resumeHotkeys())
 
     // Session restore is a background task — the UI can render (and show Sign-In) meanwhile.
+    // 归档迁移与登录方式无关，会话可用后统一跑一次。
+    const migrateLegacyArchive = async (): Promise<void> => {
+      // Archive used to be tracked locally; push those notes into the server's own bucket and
+      // only forget them once every one of them landed.
+      const legacy = readLegacyArchived()
+      if (legacy.length === 0) return
+      let migrated = true
+      for (const name of legacy) {
+        const result = await memos.updateMemo(name, { state: 'ARCHIVED' })
+        if (!result.success) {
+          migrated = false
+          console.warn('[memotrail] could not migrate archived note', name, result.error)
+        }
+      }
+      if (migrated) clearLegacyArchived()
+    }
+
     if (config.serverUrl) {
       memos.setBaseUrl(config.serverUrl)
-      // The refresh token is a rotating cookie the server hands back in a response header; we keep
-      // it encrypted with the OS keychain so a restart can sign in again without the password.
-      memos.setRefreshToken(loadRefreshToken())
-      void memos.refresh().then(async (restored) => {
-        if (!restored.success) {
-          console.warn('[memotrail] no stored session:', restored.error)
-          return
-        }
-        // Archive used to be tracked locally; push those notes into the server's own bucket and
-        // only forget them once every one of them landed.
-        const legacy = readLegacyArchived()
-        if (legacy.length > 0) {
-          let migrated = true
-          for (const name of legacy) {
-            const result = await memos.updateMemo(name, { state: 'ARCHIVED' })
-            if (!result.success) {
-              migrated = false
-              console.warn('[memotrail] could not migrate archived note', name, result.error)
+      if (config.authMode === 'token') {
+        // 个人访问令牌本身就是凭证，没有 refresh 流程：装进去后第一次请求就是校验。
+        const token = loadAccessToken()
+        if (token) {
+          memos.adoptToken(token)
+          void memos.currentUser().then(async (probe) => {
+            if (!probe.success) {
+              console.warn('[memotrail] stored access token rejected:', probe.error)
+              return
             }
-          }
-          if (migrated) clearLegacyArchived()
+            await migrateLegacyArchive()
+          })
         }
-      })
+      } else {
+        // The refresh token is a rotating cookie the server hands back in a response header; we
+        // keep it in config.json so a restart can sign in again without the password.
+        memos.setRefreshToken(loadRefreshToken())
+        void memos.refresh().then(async (restored) => {
+          if (!restored.success) {
+            console.warn('[memotrail] no stored session:', restored.error)
+            return
+          }
+          await migrateLegacyArchive()
+        })
+      }
     }
 
     createTray({

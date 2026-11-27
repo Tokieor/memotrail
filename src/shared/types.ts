@@ -39,6 +39,30 @@ export type ApiResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; status?: number }
 
+/**
+ * How the app talks to the server.
+ * - `password`: POST /auth/signin, short-lived access token kept in memory, refresh cookie rotates it.
+ * - `token`: a personal access token (PAT) sent as `Authorization: Bearer …`, valid until revoked.
+ */
+export type AuthMode = 'password' | 'token'
+
+/** Memos server versions this client speaks. Only one is supported so far. */
+export type MemosVersion = '0.31.0'
+
+/** Result of a successful sign-in: the account plus the version the server reports. */
+export interface SignInResult {
+  user: User
+  /** `/api/v1/instance/profile` → `version`; empty string when the server does not expose it. */
+  serverVersion: string
+}
+
+/** What the settings page needs to tell the two sign-in methods apart without holding the secret. */
+export interface SessionInfo {
+  mode: AuthMode
+  /** Last four characters of the stored personal access token, so two tokens are distinguishable. */
+  tokenTail: string | null
+}
+
 /** Visual style preset: `classic` keeps the sage accent, `minimal` is pure black/white/grey. */
 export type ThemeId = 'classic' | 'minimal' | 'checklist'
 
@@ -64,6 +88,12 @@ export interface AppConfig {
   serverUrl: string
   /** Last username, so the sign-in form can prefill it. */
   username: string
+  /** Which sign-in method to show first and how the session is restored on launch. */
+  authMode: AuthMode
+  /** Server version the user picked at sign-in; only the listed ones are supported. */
+  memosVersion: MemosVersion
+  /** Version the server actually reported at the last sign-in, for the settings page to compare. */
+  serverVersion: string
   /** Electron accelerator for the quick-capture window. */
   quickHotkey: string
   /** Electron accelerator that shows / hides the main window. */
@@ -87,6 +117,24 @@ export interface ListMemosOptions {
   filter?: string
   /** Which bucket to list. Omitting it makes some servers return both. */
   state?: MemoState
+}
+
+/**
+ * 0.31.0 的官方 Saved View：`filter` 就是 ListMemos `?filter=` 用的 CEL 表达式，
+ * 由服务端执行，因此客户端不需要自己实现 CEL 解释器。
+ * 资源名形如 `users/dev/views/{id}`。
+ */
+export interface MemoView {
+  name: string
+  title: string
+  filter: string
+  icon?: { emoji?: string; lucide?: string }
+}
+
+export interface ViewDraft {
+  title: string
+  filter: string
+  icon?: MemoView['icon']
 }
 
 export interface QuickCapturePayload {
