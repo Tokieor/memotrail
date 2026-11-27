@@ -20,6 +20,13 @@ turndown.addRule('underline', {
   replacement: (content) => `<u>${content}</u>`
 })
 
+// Turndown core has no strikethrough rule either, so `<s>x</s>` used to collapse to plain `x`
+// and the note lost its strike the moment it was read back from the editor.
+turndown.addRule('strikethrough', {
+  filter: ['s', 'del'],
+  replacement: (content) => `~~${content}~~`
+})
+
 // marked renders a single newline as <br> (breaks:true); keep the round trip stable.
 turndown.addRule('lineBreak', {
   filter: 'br',

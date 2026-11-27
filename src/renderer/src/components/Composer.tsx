@@ -74,17 +74,27 @@ function tokenElement(tag: string, text: string, attributes?: Record<string, str
   return element
 }
 
-/** Markdown pairs the editor renders as soon as the caret leaves them. */
-const TOKEN_RULES: Array<{ pattern: RegExp; strict?: boolean; build: (match: RegExpExecArray) => HTMLElement }> = [
-  { pattern: /\*\*(?!\s)([^*\n]+?)\*\*/g, build: (m) => tokenElement('strong', m[1]) },
-  { pattern: /~~(?!\s)([^~\n]+?)~~/g, build: (m) => tokenElement('s', m[1]) },
+/**
+ * Markdown pairs the editor renders as soon as the caret leaves them.
+ * `trimEdges` is set on the emphasis rules only: whitespace touching an emphasis delimiter can
+ * never belong to the run (`**你好 **` is not bold in Markdown), so it is pushed outside the
+ * element. Code spans are left alone — a padded `` ` x ` `` really does keep its spaces.
+ */
+const TOKEN_RULES: Array<{
+  pattern: RegExp
+  strict?: boolean
+  trimEdges?: boolean
+  build: (match: RegExpExecArray) => HTMLElement
+}> = [
+  { pattern: /\*\*(?!\s)([^*\n]+?)\*\*/g, trimEdges: true, build: (m) => tokenElement('strong', m[1]) },
+  { pattern: /~~(?!\s)([^~\n]+?)~~/g, trimEdges: true, build: (m) => tokenElement('s', m[1]) },
   { pattern: /`([^`\n]+)`/g, build: (m) => tokenElement('code', m[1]) },
   { pattern: /<u>([^<\n]+)<\/u>/g, build: (m) => tokenElement('u', m[1]) },
   {
     pattern: /\[([^\]\n]*)\]\((https?:\/\/[^)\s]*)\)/g,
     build: (m) => tokenElement('a', m[1], { href: m[2] })
   },
-  { pattern: /\*([^*\n]+?)\*/g, strict: true, build: (m) => tokenElement('em', m[1]) }
+  { pattern: /\*([^*\n]+?)\*/g, strict: true, trimEdges: true, build: (m) => tokenElement('em', m[1]) }
 ]
 
 /** Inline marks that must never bleed into whatever gets typed next. */
@@ -134,6 +144,25 @@ function collectImages(markdown: string): DraftImage[] {
 }
 
 /**
+ * Turndown escapes every `*`, `` ` `` and `~` it sees in a text node. That is right for a literal
+ * asterisk, but the editor deliberately keeps a *finished* marker pair (`**x**`) as plain text
+ * until the caret leaves it, so escaping on the way back would turn the pair into `\*\*x\*\*`:
+ * the composer would then show backslashes (or, on a repaint, literal asterisks) and the pair
+ * could never render again. Only complete pairs are restored — a lone `*` stays escaped, since
+ * that one really is a character the user typed.
+ */
+const MARKER_PAIRS: Array<[RegExp, string]> = [
+  [/\\\*\\\*([^\\\n]+?)\\\*\\\*/g, '**$1**'],
+  [/\\~\\~([^\\\n~]+?)\\\~\\~/g, '~~$1~~'],
+  [/\\`([^\\\n`]+?)\\`/g, '`$1`'],
+  [/\\\*([^\\\n*]+?)\\\*/g, '*$1*']
+]
+
+function restoreMarkers(markdown: string): string {
+  return MARKER_PAIRS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), markdown)
+}
+
+/**
  * Markdown for the editable surface. The trailing `<br>` that keeps an empty last line typeable
  * is an editing anchor, not content, so it is dropped before conversion.
  */
@@ -142,7 +171,9 @@ function sourceFrom(root: HTMLElement): string {
   const blocks = Array.from(clone.querySelectorAll('p, div, li')) as HTMLElement[]
   const last = blocks[blocks.length - 1] ?? clone
   while (last.lastChild && last.lastChild.nodeName === 'BR') last.removeChild(last.lastChild)
-  return htmlToMarkdown(clone.innerHTML)
+  // Chrome writes a space that must not collapse as U+00A0; Markdown has no such character, so
+  // leaving it in makes the source drift away from what the surface shows.
+  return restoreMarkers(htmlToMarkdown(clone.innerHTML).replace(/\u00a0/g, ' '))
 }
 
 export function Composer({
@@ -565,12 +596,22 @@ export function Composer({
       if (!node.parentNode) parent.insertBefore(node, next)
       index = 0
     }
-    node.insertData(index, text)
+    // HTML collapses a space that ends a line to zero width, so typing one right after a
+    // formatted run visually did nothing (caret didn't move, counter didn't change). Insert a
+    // non-breaking space instead and let `sourceFrom` turn it back into " " for the source.
+    let payload = text
+    const root = previewRef.current
+    if (/^ +$/.test(text) && root) {
+      const rest = document.createRange()
+      rest.setStart(node, index)
+      rest.setEnd(root, root.childNodes.length)
+      if (!rest.toString().trim()) payload = '\u00a0'.repeat(text.length)
+    }
+    node.insertData(index, payload)
     const range = document.createRange()
-    range.setStart(node, index + text.length)
+    range.setStart(node, index + payload.length)
     range.collapse(true)
     selectRange(range)
-    const root = previewRef.current
     if (root) setContent(sourceFrom(root))
   }
 
@@ -893,11 +934,24 @@ export function Composer({
 
           const parent = text.parentNode
           if (!parent) continue
-          const head = text.data.slice(0, begin)
-          const tail = text.data.slice(finish)
+          // Whitespace touching a delimiter can never be part of the emphasis (`**你好 **` is not
+          // bold in Markdown — the closing marker must hug the text). Keeping it inside is what
+          // turned a typed trailing space into bold `&nbsp;`, which then survived into the source
+          // and made the space look swallowed. Move it outside instead.
+          const inner = match[1]
+          const lead = rule.trimEdges ? /^\s*/.exec(inner)![0] : ''
+          const trail = rule.trimEdges ? /\s*$/.exec(inner)![0] : ''
+          const core = inner.slice(lead.length, inner.length - trail.length)
+          if (!core) continue
+          const head = text.data.slice(0, begin) + lead
+          const tail = trail + text.data.slice(finish)
           const headNode = head ? document.createTextNode(head) : null
           const tailNode = tail ? document.createTextNode(tail) : null
-          const element = rule.build(match)
+          const shaped = match.slice() as unknown as RegExpExecArray
+          shaped.index = match.index
+          shaped.input = match.input
+          shaped[1] = core
+          const element = rule.build(shaped)
           const fragment = document.createDocumentFragment()
           if (headNode) fragment.appendChild(headNode)
           fragment.appendChild(element)
