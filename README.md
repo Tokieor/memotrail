@@ -96,6 +96,8 @@ chmod +x MemoTrail-*.AppImage && ./MemoTrail-*.AppImage
 | 发送 / 保存 | `⌘↩` | `Ctrl+Enter` |
 | 收起快速记录 | `Esc` | `Esc` |
 
+托盘图标：左键直接打开主窗口，右键（macOS 上也可 `Control`+点击）弹出菜单。
+
 ## 开发
 
 需要 Node.js ≥ 22.12。

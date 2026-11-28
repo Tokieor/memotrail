@@ -31,14 +31,23 @@ export function createTray(actions: TrayActions): Tray {
 
   const tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
   tray.setToolTip('MemoTrail')
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: '打开 MemoTrail', click: actions.open },
-      { label: '快速记录', click: actions.quickCapture },
-      { type: 'separator' },
-      { label: '退出', click: actions.quit }
-    ])
-  )
+
+  const menu = Menu.buildFromTemplate([
+    { label: '打开 MemoTrail', click: actions.open },
+    { label: '快速记录', click: actions.quickCapture },
+    { type: 'separator' },
+    { label: '退出', click: actions.quit }
+  ])
+
+  if (isMac) {
+    // macOS 上一旦 setContextMenu，左键点击也会把菜单弹出来。改成右键（含 Control+点击）时手动弹，
+    // 左键留给「打开主窗口」。
+    tray.on('right-click', () => tray.popUpContextMenu(menu))
+  } else {
+    // Windows/Linux 的托盘菜单只有右键才触发，左键照样走 click 事件。
+    tray.setContextMenu(menu)
+  }
+
   tray.on('click', actions.open)
   return tray
 }
