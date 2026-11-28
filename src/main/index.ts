@@ -19,12 +19,17 @@ function isolateDevUserData(): void {
   if (app.isPackaged) return
   const productionDir = app.getPath('userData')
   const devDir = join(dirname(productionDir), `${app.name}-Dev`)
-  if (!existsSync(devDir)) mkdirSync(devDir, { recursive: true })
   const source = join(productionDir, 'config.json')
   const target = join(devDir, 'config.json')
-  if (existsSync(source) && !existsSync(target)) {
-    copyFileSync(source, target)
-    useDevHotkeysInFile(target)
+  try {
+    if (!existsSync(devDir)) mkdirSync(devDir, { recursive: true })
+    // 首次启动开发版时把安装版的登录态带过来；拷不动就退回未登录状态，不能因此让应用起不来。
+    if (existsSync(source) && !existsSync(target)) {
+      copyFileSync(source, target)
+      useDevHotkeysInFile(target)
+    }
+  } catch (error) {
+    console.warn('[config] 开发版数据目录初始化失败，将以空白配置启动', error)
   }
   app.setPath('userData', devDir)
 }
