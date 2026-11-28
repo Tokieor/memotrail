@@ -36,6 +36,25 @@ interface Draft {
 
 const EMOJIS = ['⭐', '📌', '📝', '💡', '✅', '🔖', '📅', '🌿', '🔍', '🚩']
 
+/**
+ * 「更多」面板里的图标。Memos 的视图图标只存 emoji 字段，
+ * 所以纯色也用方块/圆形 emoji 表示——换设备、换客户端都还能正常显示。
+ */
+const ICON_GROUPS: { label: string; items: string[] }[] = [
+  {
+    label: '笔记与文档',
+    items: ['📓', '📔', '📒', '📕', '📗', '📘', '📙', '📚', '📄', '📃', '🗒️', '📋', '🗂️', '📁', '🧾', '📦']
+  },
+  {
+    label: '标记与状态',
+    items: ['🌟', '✨', '🔥', '⚡', '❗', '❓', '☑️', '✔️', '⏳', '🎯', '🏷️', '📍', '🔒', '🕐', '🌙', '☀️']
+  },
+  {
+    label: '纯色',
+    items: ['🟥', '🟧', '🟨', '🟩', '🟦', '🟪', '🟫', '⬛', '⬜', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '🟤', '⚫', '⚪']
+  }
+]
+
 function emptyDraft(): Draft {
   return { title: '', emoji: '⭐', rules: { combine: 'and', conditions: [newCondition()] }, rawMode: false, raw: '' }
 }
@@ -50,6 +69,7 @@ export function ViewManager({ views, tagNames, activeView, onClose, onRefresh, o
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [example, setExample] = useState('')
+  const [iconPanel, setIconPanel] = useState(false)
 
   const expression = draft.rawMode ? draft.raw.trim() : buildViewExpression(draft.rules)
 
@@ -58,6 +78,7 @@ export function ViewManager({ views, tagNames, activeView, onClose, onRefresh, o
     setDraft(emptyDraft())
     setMessage('')
     setExample('')
+    setIconPanel(false)
   }
 
   function openEdit(view: MemoView): void {
@@ -72,6 +93,7 @@ export function ViewManager({ views, tagNames, activeView, onClose, onRefresh, o
     })
     setMessage('')
     setExample('')
+    setIconPanel(false)
   }
 
   function patch(patch: Partial<Draft>): void {
@@ -195,7 +217,36 @@ export function ViewManager({ views, tagNames, activeView, onClose, onRefresh, o
                     onClick={() => patch({ emoji })}
                   >{emoji}</button>
                 ))}
+                <button
+                  className={`view-emoji view-emoji-more${iconPanel ? ' open' : ''}${EMOJIS.includes(draft.emoji) ? '' : ' selected'}`}
+                  title={iconPanel ? '收起更多图标' : '更多图标'}
+                  aria-expanded={iconPanel}
+                  onClick={() => setIconPanel((open) => !open)}
+                >{EMOJIS.includes(draft.emoji) ? '⋯' : draft.emoji}</button>
               </div>
+
+              {iconPanel && (
+                <div className="view-icon-panel">
+                  {ICON_GROUPS.map((group) => (
+                    <section className="view-icon-group" key={group.label}>
+                      <span className="view-icon-group-label">{group.label}</span>
+                      <div className="view-icon-grid">
+                        {group.items.map((icon) => (
+                          <button
+                            key={icon}
+                            className={`view-emoji${draft.emoji === icon ? ' selected' : ''}`}
+                            title={icon}
+                            onClick={() => {
+                              patch({ emoji: icon })
+                              setIconPanel(false)
+                            }}
+                          >{icon}</button>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="view-form-row">
