@@ -68,6 +68,14 @@ export function buildFilter(query: string, tag: string | null, day?: string | nu
   return parts.length > 0 ? parts.join(' && ') : undefined
 }
 
+/**
+ * 当前筛选条件的指纹。侧栏快照拿它和「数据是按什么条件取回来的」比对，
+ * 只有对得上才算最新——否则切视图/切标签时会拿半路的数据去覆盖侧栏。
+ */
+function filterSignature(nav: NavKey, view: string | null, tag: string | null, day: string | null, query: string): string {
+  return [nav, view ?? '', tag ?? '', day ?? '', query].join('\u0001')
+}
+
 export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JSX.Element {
   const [memos, setMemos] = useState<Memo[]>([])
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined)
@@ -90,6 +98,8 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
   /** 当前这批 memos 属于哪个导航。切页后新请求没回来之前它还是旧值，
    *  用来挡住「拿归档数据去算标签栏」那一下闪烁。 */
   const loadedNav = useRef<NavKey | null>(null)
+  /** 这批 memos 是按哪套筛选条件取回来的，见 filterSignature()。 */
+  const loadedFilter = useRef('')
   const [showToTop, setShowToTop] = useState(false)
 
   // 官方 Saved Views：列表存在服务端，当前选中的视图只是本地 UI 状态。
@@ -124,6 +134,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       // through 同步中 / ··· — only an explicit refresh shows the spinner.
       if (!options?.silent) setSyncState('syncing')
       const effectiveTag = tag
+      const signature = filterSignature(nav, activeView, effectiveTag, day, debouncedQuery)
       // 归档 is a server-side bucket: the same list endpoint, a different `state`.
       const result = await window.api.memos.list({
         pageSize: 50,
@@ -135,6 +146,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
         const page = result.data.memos ?? []
         // 先认领这批数据的归属，再交给 React：feedMemos 的 effect 靠它判断数据是否已经换页。
         loadedNav.current = nav
+        loadedFilter.current = signature
         setMemos((current) => (reset ? page : [...current, ...page]))
         setNextPageToken(result.data.nextPageToken || undefined)
         setSyncState('synced')
@@ -144,7 +156,7 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
       }
       setLoading(false)
     },
-    [nav, debouncedQuery, tag, day, activeFilter, nextPageToken]
+    [nav, activeView, debouncedQuery, tag, day, activeFilter, nextPageToken]
   )
 
   useEffect(() => {
@@ -217,13 +229,19 @@ export function Timeline({ config, user, onSignOut, onConfigChange }: Props): JS
    * non-archive snapshot: inside 归档 the loaded list only holds archived notes.
    */
   const [feedMemos, setFeedMemos] = useState<Memo[]>([])
+  /** 当前筛选条件的指纹；和 loadedFilter 对不上就说明手上的数据是上一套条件的产物。 */
+  const signature = filterSignature(nav, activeView, tag, day, debouncedQuery)
+  /** 视图/标签/日期/搜索都属于「筛选后的列表」，它不能拿来当侧栏的全量快照。 */
+  const unfiltered = !activeView && !tag && !day && !debouncedQuery
   useEffect(() => {
-    if (nav === 'archive') return
+    if (nav === 'archive' || !unfiltered) return
     // 从归档切回「全部笔记」的瞬间，memos 里还是归档那一批（新请求在路上），
     // 由它过滤出的 liveMemos 是空的 —— 直接采纳会把标签栏清空一帧再填回来，就是那下闪烁。
-    if (loadedNav.current !== nav) return
+    // 切视图同理：视图列表只有几条，拿去覆盖会让「全部笔记」的计数、热力图和标签栏
+    // 先缩水再涨回来。两种情况都靠这两个 ref 挡住，等对应条件的数据真正回来再采纳。
+    if (loadedNav.current !== nav || loadedFilter.current !== signature) return
     setFeedMemos(liveMemos)
-  }, [liveMemos, nav])
+  }, [liveMemos, nav, unfiltered, signature])
 
   // 标签栏只在「未过滤」时重算：否则选中标签后列表被服务端过滤，计数和顺序都会跳动。
   // 归档笔记不算进标签计数，否则点进标签看到的条数会比侧栏少。
