@@ -268,7 +268,9 @@ button {
   align-items: center;
   justify-content: space-between;
   height: 28px;
-  padding: 0 10px;
+  /* 右侧留 4px：图标本身在 22px 命中区里还有 3px 内边距，这样它的墨迹右边缘
+     正好落在标签计数的右边缘上（计数行右侧 padding 是 10px）。 */
+  padding: 0 4px 0 10px;
   font-size: calc(11px * var(--font-scale, 1));
   font-weight: 500;
   letter-spacing: 0.5px;
@@ -1463,20 +1465,20 @@ button {
 .dialog-warning { margin: 0; font-size: calc(11px * var(--font-scale, 1)); color: var(--danger); }
 
 /* ---------- Saved Views (0.31.0)：与标签列表同款布局 ---------- */
-/* 侧栏里的视图项跟 .tag-item 一套尺寸/交互，标题行右上角是管理入口。 */
-.view-nav-list { display: flex; flex-direction: column; gap: 1px; }
+/* 视图项与上方「全部笔记」等导航项同尺寸，读起来才是一条竖线。 */
+.view-nav-list { display: flex; flex-direction: column; gap: 2px; }
 .view-nav-item {
   display: flex; align-items: center; gap: 10px;
-  width: 100%; height: 30px; padding: 0 10px 0 9px; border: 0; border-radius: 6px;
+  width: 100%; height: 36px; padding: 0 10px; border: 0; border-radius: var(--r-ctl);
   background: transparent; color: var(--muted); font: inherit;
-  font-size: calc(12px * var(--font-scale, 1)); text-align: left; cursor: pointer;
+  font-size: calc(13px * var(--font-scale, 1)); text-align: left; cursor: pointer;
   transition: background 0.15s;
 }
 .view-nav-item:hover { background: var(--tint-hover); }
 .view-nav-item.active { background: var(--accent); color: var(--on-accent); font-weight: 500; }
 .view-nav-item.active:hover { background: var(--accent-hover); }
 .view-nav-item .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.view-nav-item-icon { width: 15px; flex: 0 0 15px; text-align: center; font-size: 12px; line-height: 1; }
+.view-nav-item-icon { width: 18px; flex: 0 0 18px; text-align: center; font-size: 14px; line-height: 1; }
 .view-nav-empty { padding: 6px 10px; font-size: calc(11px * var(--font-scale, 1)); color: var(--faint); }
 .active-view-chip {
   display: inline-flex; align-items: center; gap: 5px; margin-left: 10px;
