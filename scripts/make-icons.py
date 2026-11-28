@@ -52,14 +52,33 @@ def tray_windows() -> None:
 
 
 def tray_template() -> None:
-    """44² macOS 托盘模板：深色图形剪影，纯黑 + alpha，系统自动反色。"""
-    import numpy as np
-    im = Image.open(SRC).convert('RGB').crop((55, 33, 909, 878))
-    small = np.asarray(im.resize((44, 44), Image.LANCZOS)).astype(float)
-    alpha = np.clip((180.0 - small.mean(axis=2)) / 90.0, 0.0, 1.0)
-    out = np.zeros((44, 44, 4), dtype=np.uint8)
-    out[:, :, 3] = (alpha * 255).astype(np.uint8)
-    Image.fromarray(out, 'RGBA').save(RES / 'trayTemplate.png')
+    """macOS 菜单栏托盘模板：18pt 画布 + 同名 @2x 高清版。
+
+    菜单栏图标的标准高度是 18pt。早先出的是 44²，系统按 44pt 去画，图标会顶出菜单栏、
+    还会把相邻的状态项挤开。这里按 18/36 各出一张（Electron 认同目录的 @2x），图形取候选稿
+    的深色剪影，并抹掉右上角那颗小圆点——18pt 下它只会变成一粒脏点。
+    """
+    ink = Image.open(SRC).convert('RGB').crop((55, 33, 909, 878))
+    # 亮度 → alpha：米白底与细描边归零，只有卡片本身的深色留下（模板图只看 alpha）
+    mask = ink.convert('L').point(lambda v: 255 if v <= 60 else max(0, int((215 - v) / 155 * 255)))
+    mask.paste(0, (700, 230, 810, 330))  # 右上角独立圆点（原图坐标 775,276-851,348）
+    glyph = mask.crop(mask.getbbox())
+
+    def render(size: int, content: int, path: Path, boost: bool) -> None:
+        gw, gh = glyph.size
+        scale = content / max(gw, gh)
+        w, h = max(1, round(gw * scale)), max(1, round(gh * scale))
+        # 先在 4 倍尺寸上缩放再落回目标像素，边缘更干净
+        small = glyph.resize((w * 4, h * 4), Image.LANCZOS).resize((w, h), Image.LANCZOS)
+        if boost:
+            # 1x 下卡片之间的细描边会糊成灰雾，提一档对比保住层次
+            small = small.point(lambda v: 0 if v < 45 else (255 if v > 165 else int((v - 45) * 255 / 120)))
+        plate = Image.new('L', (size, size), 0)
+        plate.paste(small, ((size - w) // 2, (size - h) // 2))
+        Image.merge('RGBA', [Image.new('L', plate.size, 0)] * 3 + [plate]).save(path)
+
+    render(18, 18, RES / 'trayTemplate.png', True)
+    render(36, 36, RES / 'trayTemplate@2x.png', False)
 
 
 if __name__ == '__main__':

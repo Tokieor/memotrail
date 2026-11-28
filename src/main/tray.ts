@@ -13,11 +13,21 @@ export interface TrayActions {
   quit: () => void
 }
 
+/** macOS 菜单栏图标的规范高度是 18pt，高清资源由同名 @2x 文件提供。 */
+const MAC_TRAY_HEIGHT = 18
+
 export function createTray(actions: TrayActions): Tray {
   const isMac = process.platform === 'darwin'
   // macOS 用模板图自动适配菜单栏明暗；Windows 用彩色图标，深色任务栏上也看得清。
-  const image = nativeImage.createFromPath(resourcePath(isMac ? 'trayTemplate.png' : 'trayWindows.png'))
-  if (isMac) image.setTemplateImage(true)
+  let image = nativeImage.createFromPath(resourcePath(isMac ? 'trayTemplate.png' : 'trayWindows.png'))
+  if (isMac) {
+    // 资源若被换回大图（或第三方替换），这里按高度压到标准，免得图标顶出菜单栏。
+    const { width, height } = image.getSize()
+    if (height > MAC_TRAY_HEIGHT) {
+      image = image.resize({ width: Math.round((width * MAC_TRAY_HEIGHT) / height), height: MAC_TRAY_HEIGHT })
+    }
+    image.setTemplateImage(true)
+  }
 
   const tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image)
   tray.setToolTip('MemoTrail')
